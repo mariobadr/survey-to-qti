@@ -135,18 +135,31 @@ single "points per question" setting on the export screen).
 This isnot  configurable per-question for the initial build.
 This is a placeholder decision — revisit once real submissions have been reviewed and it's clear whether per-question weighting is actually needed.
 
-### Known integration risks to de-risk FIRST, before building the rest of the UI
+### De-risking spike: confirmed working
 
-- `text2qti` as a CLI tool normally prompts interactively on first run to
-  create a config file (`.text2qti.bespon`) and ask for a LaTeX rendering
-  URL. This must be handled non-interactively inside Pyodide (pre-seed the
-  config, or bypass the prompt) since there is no terminal to answer it.
-- Confirm `micropip.install` successfully resolves and imports both
-  `text2qti` and its dependencies inside Pyodide.
-- Recommended first build step: a minimal "hello world" that runs Pyodide,
-  installs `text2qti`, feeds it a hardcoded 1-question quiz string, and
-  confirms a valid QTI zip is produced and downloadable. Do this before
-  building the review UI, since it's the highest-risk/least-certain piece.
+Spike completed and validated end-to-end, including a real import into a
+Quercus sandbox course. See
+[`spikes/text2qti-spike/`](spikes/text2qti-spike/) for the runnable page and
+full findings.
+
+- **No interactive prompt to work around.** The prompt described above only
+  lives in `text2qti`'s CLI entry point (`cmdline.main()`), gated behind a
+  tty check that's never true in Pyodide. The spike bypasses `main()`
+  entirely and drives the library directly (`Config`, `Quiz`, `QTI` from
+  `text2qti.config` / `text2qti.quiz` / `text2qti.qti`) — no argv, no
+  filesystem config seeding needed. `Config.load()` degrades gracefully
+  (warns, doesn't raise) when it can't write `~/.text2qti.bespon` in
+  Pyodide's virtual FS.
+- **`micropip.install("text2qti")` resolves cleanly.** Its two dependencies
+  (`bespon`, `markdown`) are pure Python, no compiled-extension issues.
+- **No filesystem round-trip needed.** `QTI.zip_bytes()` returns the zip as
+  in-memory `bytes` directly; cross the Python→JS boundary with
+  `pyodide.toJs()` and wrap in a `Blob` for download.
+- **Confirmed real-world import.** The generated zip was imported into a
+  Quercus sandbox course and loaded correctly as a quiz.
+
+Not yet exercised by the spike — carried forward as test cases for full QTI
+export in [Section 10, step 5](#10-build-order-recommended).
 
 ## 7. Gradebook CSV export
 
@@ -188,13 +201,27 @@ Approach:
 
 ## 10. Build order (recommended)
 
-1. Pyodide + text2qti de-risking spike (see Section 6) — confirm the
-   riskiest dependency works before investing in the rest
+1. ~~Pyodide + text2qti de-risking spike (see Section 6) — confirm the
+   riskiest dependency works before investing in the rest~~ **Done** — see
+   Section 6 and [`spikes/text2qti-spike/`](spikes/text2qti-spike/).
 2. CSV parser + data model, tested against a hand-written sample CSV
 3. Review queue + detail UI (no persistence yet)
 4. Autosave (localStorage/IndexedDB)
 5. Full QTI export (wire the reviewed/accepted data into the text2qti
-   pipeline validated in step 1)
+   pipeline validated in step 1). In addition to normal accepted-question
+   flows, cover these cases the spike didn't exercise:
+   - Multi-question quizzes (spike only built a single question)
+   - Per-question point values, once/if that becomes configurable (see
+     Section 11)
+   - Special characters in stems/options/feedback (quotes, markdown
+     metacharacters like `*`/`_`/backticks, non-ASCII text) — confirm they
+     survive the text2qti-format serialization without corrupting the
+     format's own syntax
+   - Confirm LaTeX/math-rendering code paths (`--pandoc-mathml`,
+     `run_code_blocks`) are never invoked, since they shell out via
+     `subprocess`, which doesn't exist in Pyodide — this project's plain
+     multiple-choice format shouldn't need them, but the export builder
+     should not accidentally trigger them
 6. Gradebook CSV merge/export (needs a real gradebook CSV sample to finalize
    column handling)
 
@@ -207,3 +234,13 @@ Approach:
   merge logic in Section 7
 - Whether per-question point values (vs. a fixed value) are needed — revisit
   after initial use
+
+## Changelog
+
+- 2026-07-16 — Completed the Pyodide + text2qti de-risking spike (Section
+  6). Confirmed non-interactive operation, successful `micropip` install,
+  and a valid QTI zip that imports correctly into a Quercus sandbox course.
+  Moved spike code to `spikes/text2qti-spike/`. Carried forward untested
+  cases (multi-question quizzes, per-question points, special characters,
+  confirming LaTeX/subprocess code paths stay dormant) as test cases for
+  Section 10 step 5.

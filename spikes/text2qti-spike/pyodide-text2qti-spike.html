@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pyodide + text2qti de-risking spike</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+  button { font-size: 1rem; padding: 0.5rem 1rem; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: 0.6; }
+  #log { background: #111; color: #0f0; font-family: ui-monospace, monospace; font-size: 0.85rem;
+         padding: 1rem; white-space: pre-wrap; height: 260px; overflow-y: auto; border-radius: 6px; }
+  #status { font-weight: bold; margin: 1rem 0; }
+  .ok { color: green; }
+  .err { color: crimson; }
+</style>
+</head>
+<body>
+<h1>Pyodide + text2qti de-risking spike</h1>
+<p>
+  This page runs <code>text2qti</code> entirely inside the browser via Pyodide,
+  feeds it a hardcoded one-question quiz, and downloads the resulting QTI 1.2
+  zip. No server, no CLI. See PROJECT_SPEC.md section 6.
+</p>
+<button id="run">Run spike</button>
+<p id="status"></p>
+<pre id="log"></pre>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pyodide.js"></script>
+<script>
+const QUIZ_TEXT = `Quiz title: Spike Test Quiz
+
+1.  What is the capital of France?
+a)  London
+... Nope, that's the UK.
+b)  Berlin
+... Nope, that's Germany.
+c)  Madrid
+... Nope, that's Spain.
+*d) Paris
+... Correct!
+`;
+
+// Use text2qti's internal API (Config / Quiz / QTI) directly, instead of its
+// cmdline.main() entry point. main() is the thing that prompts interactively
+// for a LaTeX rendering URL on first run — but that prompt is guarded by
+// `sys.stdout.isatty() and sys.stdin.isatty()`, which is never true inside
+// Pyodide, and it also depends on a real filesystem/argv setup we don't have
+// in-browser. Calling Config/Quiz/QTI directly sidesteps all of that and
+// hands back QTI bytes in memory (qti.zip_bytes()) with no file I/O at all.
+const PY_DRIVER = `
+from text2qti.config import Config
+from text2qti.quiz import Quiz
+from text2qti.qti import QTI
+
+config = Config()
+config.load()
+
+quiz = Quiz(quiz_text, config=config, source_name="spike.txt")
+qti = QTI(quiz)
+qti.zip_bytes()
+`;
+
+const logEl = document.getElementById("log");
+const statusEl = document.getElementById("status");
+const runBtn = document.getElementById("run");
+
+function log(msg) {
+  logEl.textContent += msg + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(msg, cls) {
+  statusEl.textContent = msg;
+  statusEl.className = cls || "";
+}
+
+function downloadZip(bytes, filename) {
+  const blob = new Blob([bytes], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function runSpike() {
+  runBtn.disabled = true;
+  logEl.textContent = "";
+  setStatus("Running...");
+  try {
+    log("[1/5] Booting Pyodide runtime...");
+    const pyodide = await loadPyodide();
+    log(`      Pyodide version: ${pyodide.version}`);
+
+    log("[2/5] Loading micropip...");
+    await pyodide.loadPackage("micropip");
+    const micropip = pyodide.pyimport("micropip");
+
+    log("[3/5] Installing text2qti (+ deps: bespon, markdown) via micropip...");
+    const t0 = performance.now();
+    await micropip.install("text2qti");
+    log(`      Installed in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+
+    log("[4/5] Running text2qti via internal API, bypassing cmdline.main()...");
+    pyodide.globals.set("quiz_text", QUIZ_TEXT);
+    const zipPy = await pyodide.runPythonAsync(PY_DRIVER);
+    const zipBytes = zipPy.toJs();
+    zipPy.destroy();
+    log(`      Generated ${zipBytes.length} zip bytes`);
+
+    log("[5/5] Triggering download of spike-output.zip...");
+    downloadZip(zipBytes, "spike-output.zip");
+
+    setStatus("Success — check your downloads for spike-output.zip", "ok");
+  } catch (err) {
+    console.error(err);
+    log("SPIKE FAILED: " + err);
+    setStatus("Failed — see log", "err");
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+runBtn.addEventListener("click", runSpike);
+</script>
+</body>
+</html>
