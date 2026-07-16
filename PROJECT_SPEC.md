@@ -205,10 +205,9 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 ### Planned rework (from hands-on TA-perspective feedback, not yet implemented)
 
 Trying Screens 1-3 end to end (all built per Section 10 step 3) surfaced changes to make
-before continuing further. None of these are implemented yet — documenting them here so
-the reasoning survives even if a different session picks this up. Screen 1 (Upload) is
-fine as-is; nothing below touches it. Items 1-5 are settled decisions; item 6 (all
-attempts, not just one) is a bigger, not-fully-designed change — see its own note on scope.
+before continuing further. Screen 1 (Upload) is fine as-is; nothing below touches it. Item
+5 is done; items 1-4 are settled decisions not yet implemented; item 6 (all attempts, not
+just one) is a bigger, not-fully-designed change — see its own note on scope.
 
 1. **Merge Queue and Detail into one screen, called the Question Review view — no more
    separate "page."** Instead of clicking a row to navigate to a separate detail view
@@ -248,8 +247,10 @@ attempts, not just one) is a bigger, not-fully-designed change — see its own n
    values are needed" item — that one is about Section 6's QTI-export points-per-question
    (the accepted question's weight in the real Canvas quiz), a separate setting from this
    review-grade `pointsPossible`.
-5. **Remove the Bloom-level filter from the Queue/Question Review view.** Not useful in
-   practice; drop the dropdown and the filtering logic behind it. The status filter stays.
+5. ~~**Remove the Bloom-level filter from the Queue/Question Review view.**~~ **Done** —
+   not useful in practice; dropped the dropdown and the filtering logic behind it in
+   [`src/components/Queue.svelte`](src/components/Queue.svelte). The status filter stays;
+   the Bloom level table column is unaffected (still shown, just not filterable).
 6. **Parse and show every attempt, not just the earliest one — bigger change, not fully
    designed yet.** Currently `parseSurveyCsv` drops every attempt but the earliest per
    student (Section 4's "Duplicate attempts" rule) and logs what it dropped. Instead, every
@@ -597,3 +598,12 @@ Approach:
   attempt's grade reaches the gradebook are all still open). This item
   also reopens part of Section 10 step 2 (the CSV parser's attempt-dedup
   logic), not just step 4 — step 2 annotated accordingly.
+- 2026-07-16 — Implemented "Planned rework" item 5 (Bloom-level filter
+  removal), the first and easiest of the six items. Removed the filter
+  dropdown, its `bloomFilter` bindable prop, and the filtering logic from
+  `Queue.svelte`; removed the corresponding state/binding from
+  `App.svelte`. The Bloom level table column is untouched. Updated
+  `Queue.test.js` (dropped the Bloom-filter test; the empty-state test
+  now reaches zero matches via status alone, rendering a two-question
+  subset rather than combining two filters, since only one filter exists
+  now) and the empty-state copy ("filters" → "filter").

@@ -1,40 +1,29 @@
 <script>
-import { BLOOM_LEVELS } from "../csv/fieldNormalization.js";
-
 /**
  * @typedef {object} Props
  * @property {object[]} questions - Valid Question objects from parseSurveyCsv
  *   (Section 4's data model), unfiltered.
  * @property {string} [statusFilter] - Bindable; lets the caller restore the
  *   filter selection when returning from the detail view.
- * @property {string} [bloomFilter] - Bindable, same reason as statusFilter.
  * @property {(id: string, workingSetIds: string[]) => void} onSelect -
  *   Called when the TA clicks a question to open the detail view (Screen 3),
  *   with that question's `id` and the ids of every question currently
- *   passing the filters (the detail view's Next/Previous navigate this
+ *   passing the filter (the detail view's Next/Previous navigate this
  *   frozen set, per Section 5).
  */
 
 /** @type {Props} */
-let {
-  questions,
-  statusFilter = $bindable("all"),
-  bloomFilter = $bindable("all"),
-  onSelect,
-} = $props();
+let { questions, statusFilter = $bindable("all"), onSelect } = $props();
 
 const STATUSES = ["pending", "accepted", "rejected"];
 
-// `questions` filtered by the current statusFilter/bloomFilter selections;
-// "all" for either one means that dimension isn't filtered.
+// `questions` filtered by the current statusFilter selection; "all" means
+// unfiltered. (A Bloom-level filter used to live here too -- dropped per
+// PROJECT_SPEC.md's "Planned rework" item 5, not useful in practice.)
 let filtered = $derived(
-  questions.filter((q) => {
-    if (statusFilter !== "all" && q.review.status !== statusFilter)
-      return false;
-    if (bloomFilter !== "all" && q.question.bloomLevel !== bloomFilter)
-      return false;
-    return true;
-  }),
+  questions.filter(
+    (q) => statusFilter === "all" || q.review.status === statusFilter,
+  ),
 );
 
 /**
@@ -65,22 +54,12 @@ function formatGrade(grade) {
         {/each}
       </select>
     </label>
-
-    <label>
-      Bloom level:
-      <select bind:value={bloomFilter}>
-        <option value="all">All</option>
-        {#each BLOOM_LEVELS as level (level)}
-          <option value={level}>{level}</option>
-        {/each}
-      </select>
-    </label>
   </div>
 
   <p>{filtered.length} of {questions.length} question(s) shown.</p>
 
   {#if filtered.length === 0}
-    <p>No questions match the current filters.</p>
+    <p>No questions match the current filter.</p>
   {:else}
     <table>
       <thead>

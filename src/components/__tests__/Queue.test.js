@@ -69,21 +69,6 @@ describe("Queue", () => {
     expect(screen.getByText("Unrecognized")).toBeInTheDocument(); // David's null bloomLevel
   });
 
-  it("filters by Bloom level", async () => {
-    renderQueue();
-
-    await userEvent.selectOptions(
-      screen.getByLabelText(/bloom level/i),
-      "Analyze",
-    );
-
-    expect(screen.getByText("2 of 4 question(s) shown.")).toBeInTheDocument();
-    expect(screen.getByText("Bob Brown")).toBeInTheDocument();
-    expect(screen.getByText("Carol Chen")).toBeInTheDocument();
-    expect(screen.queryByText("Alice Anderson")).not.toBeInTheDocument();
-    expect(screen.queryByText("David Davis")).not.toBeInTheDocument();
-  });
-
   it("filters by status", async () => {
     renderQueue();
 
@@ -94,18 +79,15 @@ describe("Queue", () => {
     expect(screen.queryByText("Alice Anderson")).not.toBeInTheDocument();
   });
 
-  it("shows an empty-state message when no questions match both filters", async () => {
-    renderQueue();
+  it("shows an empty-state message when no questions match the filter", async () => {
+    // Bob (accepted) and Carol (rejected) only -- neither is "pending".
+    renderQueue([SAMPLE_QUESTIONS[1], SAMPLE_QUESTIONS[2]]);
 
-    await userEvent.selectOptions(screen.getByLabelText(/status/i), "rejected");
-    await userEvent.selectOptions(
-      screen.getByLabelText(/bloom level/i),
-      "Remember",
-    );
+    await userEvent.selectOptions(screen.getByLabelText(/status/i), "pending");
 
-    expect(screen.getByText("0 of 4 question(s) shown.")).toBeInTheDocument();
+    expect(screen.getByText("0 of 2 question(s) shown.")).toBeInTheDocument();
     expect(
-      screen.getByText("No questions match the current filters."),
+      screen.getByText("No questions match the current filter."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });

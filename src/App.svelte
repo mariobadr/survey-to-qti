@@ -5,7 +5,6 @@ import Upload from "./components/Upload.svelte";
 
 let questions = $state(null);
 let statusFilter = $state("all");
-let bloomFilter = $state("all");
 
 // Frozen at selection time (Section 5): Next/Previous in the detail view
 // move through this snapshot of ids, not a live re-filtered list, so
@@ -77,7 +76,7 @@ function handleSave(id, updates) {
   {#if questions === null}
     <Upload onParsed={handleParsed} />
   {:else if selectedQuestion === null}
-    <Queue {questions} bind:statusFilter bind:bloomFilter onSelect={handleSelect} />
+    <Queue {questions} bind:statusFilter onSelect={handleSelect} />
   {:else}
     {#key selectedQuestion.id}
       <Detail
