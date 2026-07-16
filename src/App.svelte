@@ -1,5 +1,4 @@
 <script>
-import Detail from "./components/Detail.svelte";
 import Queue from "./components/Queue.svelte";
 import Upload from "./components/Upload.svelte";
 
@@ -12,35 +11,8 @@ let statusFilter = $state("all");
 let pointsPossibleDraft = $state(null);
 let pointsPossible = $state(null);
 
-// Frozen at selection time (Section 5): Next/Previous in the detail view
-// move through this snapshot of ids, not a live re-filtered list, so
-// editing a question mid-review can't shift what's navigable out from
-// under the TA.
-let workingSetIds = $state(null);
-let selectedQuestionId = $state(null);
-
-let selectedQuestion = $derived(
-  questions?.find((q) => q.id === selectedQuestionId) ?? null,
-);
-let selectedIndex = $derived(
-  workingSetIds && selectedQuestionId
-    ? workingSetIds.indexOf(selectedQuestionId)
-    : -1,
-);
-let hasPrevious = $derived(selectedIndex > 0);
-let hasNext = $derived(
-  workingSetIds !== null &&
-    selectedIndex >= 0 &&
-    selectedIndex < workingSetIds.length - 1,
-);
-
 function handleParsed(parsedQuestions) {
   questions = parsedQuestions;
-}
-
-function handleSelect(id, filteredIds) {
-  workingSetIds = filteredIds;
-  selectedQuestionId = id;
 }
 
 function handleCommitPointsPossible() {
@@ -49,19 +21,6 @@ function handleCommitPointsPossible() {
   // points * newPossible / oldPossible) so existing grades don't silently
   // become inconsistent with the new denominator. Not implemented yet.
   pointsPossible = pointsPossibleDraft;
-}
-
-function handleBackToQueue() {
-  selectedQuestionId = null;
-  workingSetIds = null;
-}
-
-function handlePrevious() {
-  if (hasPrevious) selectedQuestionId = workingSetIds[selectedIndex - 1];
-}
-
-function handleNext() {
-  if (hasNext) selectedQuestionId = workingSetIds[selectedIndex + 1];
 }
 
 /**
@@ -99,22 +58,12 @@ function handleSave(id, updates) {
       <span>Current: {pointsPossible ?? "not set"}</span>
     </div>
 
-    {#if selectedQuestion === null}
-      <Queue {questions} bind:statusFilter {pointsPossible} onSelect={handleSelect} />
-    {:else}
-      {#key selectedQuestion.id}
-        <Detail
-          question={selectedQuestion}
-          {pointsPossible}
-          {hasPrevious}
-          {hasNext}
-          onSave={handleSave}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-          onBack={handleBackToQueue}
-        />
-      {/key}
-    {/if}
+    <Queue
+      {questions}
+      bind:statusFilter
+      {pointsPossible}
+      onSave={handleSave}
+    />
   {/if}
 </main>
 

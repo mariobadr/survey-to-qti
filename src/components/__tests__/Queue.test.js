@@ -10,12 +10,24 @@ import Queue from "../Queue.svelte";
 // so cleanup is registered explicitly instead.
 afterEach(() => cleanup());
 
-function makeQuestion({ id, name, bloomLevel, status, grade }) {
+// Full Question shape (Section 4) is needed even though most tests here
+// only look at the table row -- expanding a row renders Detail inline
+// (Planned rework item 1), which reads every content/original field.
+function makeQuestion({ id, name, bloomLevel, status, points }) {
+  const content = {
+    stem: `Stem for ${id}`,
+    responses: { A: "A", B: "B", C: "C", D: "D" },
+    feedback: { A: "FA", B: "FB", C: "FC", D: "FD" },
+    correctAnswer: "A",
+    bloomLevel,
+    keywords: ["kw1", "kw2"],
+  };
   return {
     id,
     submission: { student: { name } },
-    question: { bloomLevel },
-    review: { status, grade },
+    question: { ...content },
+    original: { ...content },
+    review: { status, grade: { points }, wasEdited: false },
   };
 }
 
@@ -25,35 +37,38 @@ const SAMPLE_QUESTIONS = [
     name: "Alice Anderson",
     bloomLevel: "Remember",
     status: "pending",
-    grade: { points: null },
+    points: null,
   }),
   makeQuestion({
     id: "s2",
     name: "Bob Brown",
     bloomLevel: "Analyze",
     status: "accepted",
-    grade: { points: 4 },
+    points: 4,
   }),
   makeQuestion({
     id: "s3",
     name: "Carol Chen",
     bloomLevel: "Analyze",
     status: "rejected",
-    grade: { points: 2 },
+    points: 2,
   }),
   makeQuestion({
     id: "s4",
     name: "David Davis",
     bloomLevel: null,
     status: "pending",
-    grade: { points: null },
+    points: null,
   }),
 ];
 
-function renderQueue(questions = SAMPLE_QUESTIONS, pointsPossible = null) {
-  const onSelect = vi.fn();
-  render(Queue, { props: { questions, pointsPossible, onSelect } });
-  return onSelect;
+function renderQueue(
+  questions = SAMPLE_QUESTIONS,
+  pointsPossible = null,
+  onSave = vi.fn(),
+) {
+  render(Queue, { props: { questions, pointsPossible, onSave } });
+  return onSave;
 }
 
 describe("Queue", () => {
@@ -100,12 +115,51 @@ describe("Queue", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("calls onSelect with the question's id when its row is clicked", async () => {
-    const onSelect = renderQueue();
+  it("expands a row to show the review fields when clicked, and collapses it when clicked again", async () => {
+    renderQueue();
+
+    expect(screen.queryByLabelText(/stem/i)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Bob Brown" }));
 
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledWith("s2", ["s1", "s2", "s3", "s4"]);
+    expect(screen.getByLabelText(/stem/i)).toHaveValue("Stem for s2");
+
+    await userEvent.click(screen.getByRole("button", { name: "Bob Brown" }));
+
+    expect(screen.queryByLabelText(/stem/i)).not.toBeInTheDocument();
+  });
+
+  it("only expands one row at a time, auto-saving the previous row's draft when a different row is expanded", async () => {
+    const onSave = renderQueue();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Alice Anderson" }),
+    );
+    await userEvent.type(screen.getByLabelText(/^points/i), "3");
+
+    await userEvent.click(screen.getByRole("button", { name: "Bob Brown" }));
+
+    // Switching rows unmounted Alice's Detail, which auto-commits on the way
+    // out (no explicit Save click needed), and mounted Bob's instead.
+    expect(onSave).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({
+        grade: expect.objectContaining({ points: 3 }),
+      }),
+    );
+    expect(screen.getByLabelText(/stem/i)).toHaveValue("Stem for s2");
+  });
+
+  it("Close collapses the expanded row", async () => {
+    renderQueue();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Alice Anderson" }),
+    );
+    expect(screen.getByLabelText(/stem/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.queryByLabelText(/stem/i)).not.toBeInTheDocument();
   });
 });

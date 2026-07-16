@@ -183,133 +183,54 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
    can be safely mapped) or when zero valid questions resulted (nothing to
    review). Incomplete rows, word-count violations, and the other warning
    types never block.
-2. **Queue / list view** — table of all submissions: student, Bloom level,
-   status, grade. Filterable by status (the Bloom-level filter was removed,
-   see "Planned rework" item 5). Click a row to open the detail view.
-3. **Detail / review view** — one question at a time:
-   - Editable stem, four responses, four feedback fields
-   - Correct-answer selector
-   - Every editable content field (stem, each response, each feedback, the
-     correct-answer selector, Bloom level, keywords) shows the corresponding
-     `original` value (Section 4) read-only right next to it, so the TA can
-     see exactly what the student submitted while editing — not just
-     whether it's been changed (see "Planned rework" item 2)
-   - Also editable, despite not being in the original bullet list: Bloom
-     level (dropdown) and keywords (comma-separated text) — no reason they
-     should be locked when everything else is editable
-   - Grade input: `points` is editable per-question; `pointsPossible` is a
-     single value shared by every question (see "Planned rework" item 4),
-     set from a top-level input in `App.svelte` and shown here read-only. No
-     comment field — there's no mechanism to get one into the gradebook CSV
-     (Section 7), so it was removed rather than built and left unused
-   - Status: an explicit three-way Pending / Accept / Reject control
-     (Section 4's data model has three states, not two) — Accept is
-     disabled whenever the correct-answer selector is unset, since an
-     accepted question with no correct answer would produce a broken QTI
-     export later (Section 6); nothing else blocks Accept
-   - Next / Previous navigate a *frozen* snapshot of whichever questions
-     matched the Queue's filters at the moment the TA clicked in — editing
-     a question mid-review so it no longer matches those filters doesn't
-     remove it from Next/Previous for the rest of that session
-   - Editing model: every field (content and grade/status) loads into local
-     draft state on open; nothing writes back to the shared
-     question data until commit — either the explicit Save button, or
-     silently on Next/Previous/Back-to-queue (so navigating never loses
-     work, and Save is really just a manual checkpoint)
-   - `wasEdited` (Section 4) is computed from content fields only (stem,
-     responses, feedback, correct answer, Bloom level, keywords) — grading
-     and accept/reject never set it. It's a **live diff against
-     `original`** (see "Planned rework" item 2): if the TA edits a field and
-     then types the original value back before saving, `wasEdited` clears —
-     it no longer tracks "was this ever edited" as a permanent flag, since
-     the original value is always visible for comparison anyway
-   - Returning to the queue restores whatever status/Bloom-level filters
-     were active, rather than resetting to "All"
-4. **Export** — summary counts (accepted / rejected / pending), two actions:
+2. **Question Review view** — table of all submissions: student, Bloom
+   level, status, grade. Filterable by status (no Bloom-level filter — not
+   useful in practice). The row-select button shows a +/- icon and expands
+   the student's row in place (no separate detail page); only one row is
+   expanded at a time, no Next/Previous — the TA clicks whichever row they
+   want next. The expanded row splits into two panels:
+   - **Question panel** — Bloom level and Keywords side by side, then Stem,
+     then Responses as a table (correct-answer radio | Response | Feedback
+     columns, first narrower than the other two). Every editable field shows
+     what the student originally submitted, read-only, above it ("Student
+     submitted: ..."; Stem/Response/Feedback also show its word count, since
+     those have word limits — Section 4). Accept is disabled until a
+     correct answer is set.
+   - **Review panel** — Grade (points input next to the read-only "Out of"
+     pointsPossible) and Status (Pending/Accept/Reject), side by side.
+   - Editing model: fields load into local draft state on expand; nothing
+     writes back until commit — Save (stays open), Close (collapses), or
+     automatically if the row is torn down any other way (e.g. a different
+     row expands instead), so work is never lost. `wasEdited` (Section 4) is
+     a live diff against `original`, not a permanent flag.
+   - The status filter stays active while a row is expanded and after it
+     collapses.
+3. **Export** — summary counts (accepted / rejected / pending), two actions:
    - "Download QTI package" (accepted questions only)
    - "Download gradebook CSV" (all graded submissions)
 
-### Planned rework (from hands-on TA-perspective feedback, not yet implemented)
+### Planned rework (from hands-on TA-perspective feedback)
 
-Trying Screens 1-3 end to end (all built per Section 10 step 3) surfaced changes to make
-before continuing further. Screen 1 (Upload) is fine as-is; nothing below touches it. Items
-2, 3, 4, and 5 are done; item 1 is a settled decision not yet implemented; item 6 (all
-attempts, not just one) is a bigger, not-fully-designed change — see its own note on scope.
+Six items identified trying Screens 1-3 end to end. Items 1-5 are done; item 6 (parse every
+attempt, not just the earliest) is a bigger, not-fully-designed change and is what's left.
 
-1. **Merge Queue and Detail into one screen, called the Question Review view — no more
-   separate "page."** Instead of clicking a row to navigate to a separate detail view
-   (today: `App.svelte` swaps `<Queue>` out for `<Detail>`), clicking a student expands
-   their row in place within the table, showing the same fields Detail currently shows.
-   No "move to next row" affordance survives this merge — no auto-advance, no Next/Previous
-   equivalent at all, confirmed.
-   Impact: **removes Next/Previous navigation and the frozen-working-set mechanism** built
-   for it (the "Next / Previous navigate a *frozen* snapshot..." bullet above, and the
-   `workingSetIds`/`{#key}`-remount machinery in `App.svelte`) — there's no longer a
-   separate page to navigate between.
-2. ~~**Show the original CSV value next to the editable field, not just an edited/not-edited
-   flag.**~~ **Done** — added a permanent, never-mutated `original` snapshot to the data
-   model (Section 4), populated in
-   [`src/csv/parseSurveyCsv.js`](src/csv/parseSurveyCsv.js) alongside `question` (as
-   independent objects/arrays, so later edits to `question` can't reach it). Every editable
-   content field in [`src/components/Detail.svelte`](src/components/Detail.svelte) now shows
-   its `original` value read-only right below it. As anticipated, this also let `wasEdited`
-   become a simple live diff against `original` (`contentDiffersFrom(question.original)` in
-   `commit()`), replacing the monotonic OR-based computation built specifically to work
-   around not having a persisted original — `Detail.svelte`'s local `opened` snapshot still
-   exists, but now only initializes the draft state, not `wasEdited`.
-3. ~~**Remove the comment field from the grade panel.**~~ **Done** — there's no mechanism
-   to get a comment into Canvas's gradebook CSV import (Section 7's column list is
-   Student/ID/SIS User ID/SIS Login ID/Section plus one score column per assignment — no
-   comment column), so a comment typed here would go nowhere. Removed `review.grade.comment`
-   from the data model, the parser's initial grade object
-   ([`src/csv/parseSurveyCsv.js`](src/csv/parseSurveyCsv.js)), and the comment textarea from
-   [`src/components/Detail.svelte`](src/components/Detail.svelte).
-4. ~~**`pointsPossible` becomes a single fixed value, not a per-question field, edited in one
-   place.**~~ **Done** — reverses an earlier decision (see Changelog): "per-question entry"
-   was picked when this was first asked about, but that was based on a misunderstanding;
-   every question should be graded out of the same denominator. `pointsPossible` moved out
-   of `review.grade` entirely (Section 4) into a single `pointsPossible` value held in
-   [`src/App.svelte`](src/App.svelte), set via its own draft input + "Set" button (not tied
-   to any one question's Save/commit cycle) and threaded down read-only to
-   [`src/components/Queue.svelte`](src/components/Queue.svelte) (the grade column) and
-   [`src/components/Detail.svelte`](src/components/Detail.svelte) (shown as "Out of: N",
-   no input). `points` (the score earned) stays editable per-question as before; only
-   `pointsPossible` changed. Left as a **TODO, not implemented**: when `pointsPossible`
-   changes after some `points` have already been entered against the old value, those
-   `points` are not rescaled — existing grades can silently become inconsistent with the
-   new denominator until the TA revisits them by hand.
-   Note this is a different "points" concept from Section 11's "whether per-question point
-   values are needed" item — that one is about Section 6's QTI-export points-per-question
-   (the accepted question's weight in the real Canvas quiz), a separate setting from this
-   review-grade `pointsPossible`.
-5. ~~**Remove the Bloom-level filter from the Queue/Question Review view.**~~ **Done** —
-   not useful in practice; dropped the dropdown and the filtering logic behind it in
-   [`src/components/Queue.svelte`](src/components/Queue.svelte). The status filter stays;
-   the Bloom level table column is unaffected (still shown, just not filterable).
-6. **Parse and show every attempt, not just the earliest one — bigger change, not fully
-   designed yet.** Currently `parseSurveyCsv` drops every attempt but the earliest per
-   student (Section 4's "Duplicate attempts" rule) and logs what it dropped. Instead, every
-   complete, structurally-valid attempt should be parsed and shown, grouped under the
-   student — e.g. each attempt as a "subrow" under a parent student row in the Question
-   Review view — and the TA chooses which attempt (if any) to accept, rather than the
-   parser silently picking the earliest one for them.
-   This is bigger than items 1-5 and touches work already marked done, not just planned
-   work:
-   - **Reopens Section 10 step 2 (CSV parser), not just step 4.** The parser's dedup logic
-     (`src/csv/parseSurveyCsv.js`, the `duplicateAttemptDropped` warning type, the
-     `attempt` field's "kept after dedup" framing in Section 4) all assume one row survives
-     per student — all of that needs revisiting, not just the UI.
-   - **`id` can no longer be `== submission.student.sisLoginId`** (Section 4) once a
-     student can have multiple entries — needs a composite key (e.g. sisLoginId + attempt)
-     or a synthetic id.
-   - **Whether the data model itself groups by student** (an array of students, each with
-     an array of attempts) **or stays flat** (one array of attempt-questions, grouped only
-     in the UI layer by `sisLoginId`) isn't decided.
-   - **What "accepted" means across multiple attempts from the same student isn't decided**
-     — can more than one attempt from the same student be accepted at once, or should the
-     UI warn/prevent that once one is already accepted? Not specified.
-   - **Section 7's gradebook export** matches one grade per student; with multiple
-     attempts, which attempt's grade counts isn't decided.
+1. ~~Merge Queue and Detail into one Question Review view~~ **Done** — see Screen 2 above;
+   no more separate detail page, no Next/Previous/working-set navigation.
+2. ~~Show the original CSV value next to each editable field~~ **Done** — a permanent
+   `original` snapshot (Section 4) is shown read-only above every editable field;
+   `wasEdited` is a live diff against it instead of a monotonic flag.
+3. ~~Remove the comment field~~ **Done** — no gradebook CSV column exists for it (Section 7).
+4. ~~`pointsPossible` becomes a single shared value~~ **Done** — set once in `App.svelte`,
+   shown read-only per question. TODO not implemented: rescaling already-entered `points`
+   when `pointsPossible` changes.
+5. ~~Remove the Bloom-level filter~~ **Done** — not useful in practice; the table column
+   stays, just not filterable.
+6. **Parse and show every attempt per student, not just the earliest — not started.**
+   Bigger than items 1-5, and reopens work already marked done: the CSV parser's
+   attempt-dedup logic (Section 4/10 step 2), whether `id` needs a composite key, whether
+   the data model groups by student or stays flat, what "accepted" means across multiple
+   attempts from one student, and which attempt's grade reaches the gradebook (Section 7)
+   are all still open.
 
 ## 6. QTI export via text2qti + Pyodide
 
@@ -447,15 +368,15 @@ Approach:
      working-set navigation, draft-until-commit editing, content-only
      monotonic `wasEdited`).
 4. Rework Queue/Detail into the Question Review view per "Planned rework"
-   (Section 5) — items 2, 3, 4, and 5 (persisted `original` snapshot,
-   dropped `grade.comment`, non-per-question `pointsPossible`, no
-   Bloom-level filter) are done; item 1 (merged Queue+Detail view) not
-   started. Doing this before step 5 (Autosave) rather than after, since
-   building autosave against a UI/data model that's still changing would
-   mean redoing autosave work too. Includes reopening parts of step 2 (the
-   CSV parser)
-   that assumed one attempt survives per student — see "Planned rework" item
-   6, the biggest and least-designed piece of this step.
+   (Section 5) — items 1-5 (merged Queue+Detail view, persisted `original`
+   snapshot, dropped `grade.comment`, non-per-question `pointsPossible`, no
+   Bloom-level filter) are all done. Doing this before step 5 (Autosave)
+   rather than after, since building autosave against a UI/data model
+   that's still changing would mean redoing autosave work too. Item 6
+   (parse and show every attempt per student, not just the earliest) is
+   still open and still reopens part of step 2 (the CSV parser's
+   attempt-dedup logic) when it's tackled — the biggest and
+   least-designed piece of this step.
 5. Autosave (localStorage/IndexedDB)
 6. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
@@ -606,88 +527,21 @@ Approach:
   tests) covering the draft/save model, the Accept gate, `wasEdited`
   scope and monotonicity, and Previous/Next/Back all committing before
   navigating.
-- 2026-07-16 — Trying Screens 1-3 end to end surfaced four changes, captured
-  as "Planned rework" (Section 5) but not yet implemented: merge Queue and
-  Detail into one screen (row expands in place, dropping Next/Previous and
-  the frozen-working-set navigation built for it); show the original CSV
-  value alongside each editable field, not just the `wasEdited` boolean
-  (needs a permanent `original` snapshot in the data model — Section 4 —
-  which would also let `wasEdited` become a live diff instead of the
-  monotonic OR-based computation); drop `review.grade.comment` entirely,
-  since Section 7's gradebook CSV import has no comment column for it to
-  reach; and reverse the "per-question `pointsPossible`" decision from
-  earlier today back to a single value shared by all questions, shown
-  read-only in the detail view rather than edited there. Section 10's
-  build order updated: this rework is now step 4, ahead of Autosave (now
-  step 5), so autosave isn't built against a data model/UI about to
-  change.
-- 2026-07-16 — Follow-up to the above, resolving two open questions and
-  adding two more items to "Planned rework" (Section 5): confirmed no
-  "move to next row" affordance survives the Queue/Detail merge (item 1)
-  — no auto-advance at all; confirmed `pointsPossible` (item 4) is edited
-  in one place near the top of the merged view (now named the Question
-  Review view) and shown read-only per question. New: (5) drop the
-  Bloom-level filter, it's not useful in practice; (6) parse and show
-  every attempt per student instead of silently keeping only the
-  earliest, with the TA choosing which to accept — flagged as
-  meaningfully bigger and not fully designed yet (composite id scheme,
-  flat-vs-grouped data model, cross-attempt accept semantics, and which
-  attempt's grade reaches the gradebook are all still open). This item
-  also reopens part of Section 10 step 2 (the CSV parser's attempt-dedup
-  logic), not just step 4 — step 2 annotated accordingly.
-- 2026-07-16 — Implemented "Planned rework" item 5 (Bloom-level filter
-  removal), the first and easiest of the six items. Removed the filter
-  dropdown, its `bloomFilter` bindable prop, and the filtering logic from
-  `Queue.svelte`; removed the corresponding state/binding from
-  `App.svelte`. The Bloom level table column is untouched. Updated
-  `Queue.test.js` (dropped the Bloom-filter test; the empty-state test
-  now reaches zero matches via status alone, rendering a two-question
-  subset rather than combining two filters, since only one filter exists
-  now) and the empty-state copy ("filters" → "filter").
-- 2026-07-16 — Implemented "Planned rework" item 3 (drop the grade
-  comment field). Removed `review.grade.comment` from the data model
-  (Section 4), the parser's initial grade object
-  (`src/csv/parseSurveyCsv.js`), and the comment textarea plus its
-  draft/`isDirty`/commit plumbing in `Detail.svelte`. `App.svelte` needed
-  no change, since it already assigns `review.grade` wholesale from the
-  save payload. Updated `parseSurveyCsv.test.js` and `Detail.test.js`
-  (two tests that used the comment field to create a dirty draft or
-  verify grade-only changes now use the points field instead).
-- 2026-07-16 — Implemented "Planned rework" item 4 (`pointsPossible` becomes
-  a single shared value, not per-question). Removed `pointsPossible` from
-  `review.grade` in the data model (Section 4) and the parser's initial
-  grade object (`src/csv/parseSurveyCsv.js`); added a `pointsPossible` value
-  in `App.svelte` with its own draft input + "Set" button (independent of
-  any question's Save/commit cycle), threaded down as a read-only prop to
-  `Queue.svelte` (used to format the grade column) and `Detail.svelte`
-  (shown as "Out of: N", no input — the editable "Out of" field and its
-  draft state/isDirty/commit plumbing were removed from `Detail.svelte`).
-  Added a TODO in `App.svelte`'s commit handler: rescaling already-entered
-  `points` when `pointsPossible` changes is not implemented. Updated
-  `parseSurveyCsv.test.js`, `Detail.test.js` (new pointsPossible-display
-  tests; `renderDetail` now takes/forwards a `pointsPossible` prop), and
-  `Queue.test.js` (`formatGrade` now takes `points` plus the shared
-  `pointsPossible` prop rather than a per-question `grade` object; split
-  the "formatted grades" test into an unset-pointsPossible case and a
-  shared-pointsPossible case).
-- 2026-07-16 — Implemented "Planned rework" item 2 (show the original CSV
-  value next to each editable field). Added a permanent `original` field to
-  the data model (Section 4) — same shape as `question`'s content fields,
-  built in `src/csv/parseSurveyCsv.js` alongside `question` from
-  independently-copied objects/arrays (never shared references, so later
-  edits can't reach it) and never mutated after parse. `Detail.svelte` now
-  shows `question.original`'s value read-only next to stem, each
-  response/feedback, the correct-answer selector, Bloom level, and
-  keywords. As the spec anticipated when this item was first scoped,
-  having a persisted original let `wasEdited` become a live diff
-  (`contentDiffersFrom(question.original)`, computed fresh in `commit()`)
-  instead of the monotonic OR-based flag it replaced — reverting an edited
-  field back to its original value before saving now clears `wasEdited`,
-  where before it would have stayed permanently flagged. The local `opened`
-  snapshot in `Detail.svelte` still exists but now only seeds the draft
-  state on mount. Updated `parseSurveyCsv.test.js` (asserts `original`
-  matches the parsed content and isn't reference-shared with `question`)
-  and `Detail.test.js` (test helpers now build both `question` and
-  `original`, defaulting to the same content; added tests for the
-  original-value display and for the live-diff `wasEdited` behavior;
-  replaced the old monotonic-`wasEdited` test).
+- 2026-07-16 — Reworked Queue/Detail into a single Question Review view per
+  hands-on TA-perspective feedback ("Planned rework" items 1-5 above; item 6
+  not started). Queue rows now expand in place (no separate Detail page, no
+  Next/Previous); added a permanent `original` snapshot to the data model
+  (Section 4) so the view can show what the student submitted next to each
+  editable field, which also let `wasEdited` become a live diff instead of a
+  separately-tracked flag; `pointsPossible` became a single shared value set
+  once in `App.svelte`; removed the grade comment field and the Bloom-level
+  filter.
+- 2026-07-16 — Iterated on the Question Review view's layout based on
+  further hands-on feedback: split it into a "Question" panel (Bloom
+  level/Keywords side by side, Stem, Responses) and a "Review" panel (Grade
+  and Status side by side); laid out Responses as a correct-answer/
+  Response/Feedback table instead of a tall stack; relabeled "Original" to
+  "Student submitted" and "Response A"/"Feedback A" to "Final version"
+  (less repetition — the table's row/column headers already say which
+  letter and field); added each original submission's word count next to
+  Stem/Response/Feedback; added a +/- expand icon to each row.

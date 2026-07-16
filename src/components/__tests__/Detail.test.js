@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/svelte";
+import { cleanup, render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Detail from "../Detail.svelte";
@@ -54,30 +54,37 @@ function makeQuestion({
   };
 }
 
+// Every letter's Response/Feedback textarea shares the same "Final version:"
+// label (Section 5 -- the row/column position already conveys which is
+// which), so they can't be told apart by accessible name alone. Locate the
+// row via its (unique) correct-answer radio instead, then pick out the two
+// textareas by their fixed order within that row: Response, then Feedback.
+function getResponseFields(letter) {
+  const row = screen
+    .getByRole("radio", { name: `${letter} is correct` })
+    .closest("tr");
+  const [responseField, feedbackField] = within(row).getAllByRole("textbox");
+  return { responseField, feedbackField };
+}
+
 function renderDetail({
   question,
   original,
   review,
   pointsPossible = null,
-  hasPrevious = false,
-  hasNext = false,
 } = {}) {
   const callbacks = {
     onSave: vi.fn(),
-    onNext: vi.fn(),
-    onPrevious: vi.fn(),
-    onBack: vi.fn(),
+    onClose: vi.fn(),
   };
-  render(Detail, {
+  const result = render(Detail, {
     props: {
       question: makeQuestion({ question, original, review }),
       pointsPossible,
-      hasPrevious,
-      hasNext,
       ...callbacks,
     },
   });
-  return callbacks;
+  return { ...callbacks, unmount: result.unmount };
 }
 
 describe("Detail", () => {
@@ -90,7 +97,7 @@ describe("Detail", () => {
     expect(screen.getByLabelText(/stem/i)).toHaveValue(
       "What is the base case of a recursive function?",
     );
-    expect(screen.getByLabelText(/response B/i)).toHaveValue(
+    expect(getResponseFields("B").responseField).toHaveValue(
       "A case that stops the recursion",
     );
     expect(screen.getByLabelText(/bloom level/i)).toHaveValue("Remember");
@@ -127,18 +134,35 @@ describe("Detail", () => {
 
     expect(
       screen.getByText(
-        "Original: What is the base case of a recursive function?",
+        "Student submitted (9 words): What is the base case of a recursive function?",
       ),
+    ).toBeInTheDocument(); // stem, 9 words
+    expect(
+      screen.getByText(
+        "Student submitted (6 words): A case that stops the recursion",
+      ),
+    ).toBeInTheDocument(); // response B, 6 words
+    expect(
+      screen.getByText("Student submitted (1 words): Correct."),
+    ).toBeInTheDocument(); // feedback B, 1 word
+    expect(
+      screen.getByText("Student submitted this as the correct answer"),
+    ).toBeInTheDocument(); // grouped with response B's radio
+    expect(screen.getByText("Student submitted: Remember")).toBeInTheDocument(); // bloom level
+    expect(
+      screen.getByText("Student submitted: recursion, base case"),
+    ).toBeInTheDocument(); // keywords
+  });
+
+  it("falls back to a standalone note when the original correct answer was never recognized", () => {
+    renderDetail({ original: { correctAnswer: null } });
+
+    expect(
+      screen.getByText("Student submitted correct answer: — none —"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Original: A case that stops the recursion"),
-    ).toBeInTheDocument(); // response B
-    expect(screen.getByText("Original: Correct.")).toBeInTheDocument(); // feedback B
-    expect(screen.getByText("Original correct answer: B")).toBeInTheDocument();
-    expect(screen.getByText("Original: Remember")).toBeInTheDocument(); // bloom level
-    expect(
-      screen.getByText("Original: recursion, base case"),
-    ).toBeInTheDocument(); // keywords
+      screen.queryByText("Student submitted this as the correct answer"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows no 'unsaved changes' indicator until something is edited", async () => {
@@ -282,39 +306,38 @@ describe("Detail", () => {
     expect(screen.getByText(/55 words, limit 50/)).toBeInTheDocument();
   });
 
-  it("Previous/Next reflect hasPrevious/hasNext and commit the draft before navigating", async () => {
-    const { onSave, onNext, onPrevious } = renderDetail({
-      hasPrevious: true,
-      hasNext: true,
-    });
+  it("Close commits the draft and calls onClose, without saving twice", async () => {
+    const { onSave, onClose } = renderDetail();
 
     await userEvent.type(screen.getByLabelText(/^points/i), "4");
-
-    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
-
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onNext).toHaveBeenCalledTimes(1);
-    expect(onPrevious).not.toHaveBeenCalled();
-  });
-
-  it("disables Previous/Next when hasPrevious/hasNext are false", () => {
-    renderDetail({ hasPrevious: false, hasNext: false });
-
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-  });
-
-  it("Back to queue commits the draft before navigating back", async () => {
-    const { onSave, onBack } = renderDetail();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Back to queue" }),
+    expect(onSave).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({
+        grade: expect.objectContaining({ points: 4 }),
+      }),
     );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits the current draft automatically when unmounted without an explicit Save or Close", async () => {
+    // Mirrors what happens when the parent Queue row collapses or a
+    // different row is expanded instead -- Detail is torn down without any
+    // button inside it being clicked, so the auto-commit has to happen on
+    // unmount, not from a click handler.
+    const { onSave, unmount } = renderDetail();
+
+    await userEvent.type(screen.getByLabelText(/^points/i), "4");
+    unmount();
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({
+        grade: expect.objectContaining({ points: 4 }),
+      }),
+    );
   });
 });

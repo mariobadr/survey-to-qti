@@ -1,5 +1,5 @@
 <script>
-import { untrack } from "svelte";
+import { onDestroy, untrack } from "svelte";
 import {
   BLOOM_LEVELS,
   isKeywordCountExpected,
@@ -13,45 +13,37 @@ const RESPONSE_LETTERS = ["A", "B", "C", "D"];
 /**
  * @typedef {object} Props
  * @property {object} question - The live Question object to review (Section
- *   4's data model), including its permanent `original` snapshot. A fresh
- *   Detail instance is created per navigated question (App.svelte wraps
- *   this component in a `{#key}` block), so the draft state below only
- *   ever initializes once per question.
+ *   4's data model), including its permanent `original` snapshot. Detail is
+ *   rendered inline within a Queue row (Section 5's Question Review view),
+ *   one instance per expanded row; the parent gives each expanded question a
+ *   fresh instance (e.g. via `{#if q.id === expandedId}`), so the draft
+ *   state below only ever initializes once per question.
  * @property {number | null} pointsPossible - The single points-possible
  *   value shared across every question (Planned rework item 4). Set from
  *   the top-level input in App.svelte; shown here read-only since it's no
  *   longer a per-question field.
- * @property {boolean} hasPrevious
- * @property {boolean} hasNext
  * @property {(id: string, updates: object) => void} onSave - Commits the
  *   draft back into the shared question data.
- * @property {() => void} onNext
- * @property {() => void} onPrevious
- * @property {() => void} onBack
+ * @property {() => void} onClose - Collapses this row back in the parent
+ *   Queue table. Doesn't need to commit the draft itself -- collapsing
+ *   unmounts this component, and the onDestroy hook below commits on the
+ *   way out regardless of why it's unmounting.
  */
 
 /** @type {Props} */
-let {
-  question,
-  pointsPossible,
-  hasPrevious,
-  hasNext,
-  onSave,
-  onNext,
-  onPrevious,
-  onBack,
-} = $props();
+let { question, pointsPossible, onSave, onClose } = $props();
 
-// A fresh Detail instance is created per navigated question (App.svelte
-// wraps this component in a {#key selectedQuestion.id} block), so it's safe
-// to snapshot `question` exactly once here and treat it as fixed for this
-// component's entire lifetime -- nothing below writes back to `question`
-// itself until commit() runs (explicit Save, or auto-save on
-// Next/Previous/Back -- Section 5). Snapshotting via a function, rather
-// than reading `question` directly in the $state(...) calls below, avoids
-// Svelte's state_referenced_locally warning, which exists to catch the
-// (different) mistake of assuming a prop read stays live without a
-// {#key}/$derived -- not applicable here, since it deliberately doesn't.
+// Detail is rendered inline within a Queue row, one instance per expanded
+// question; the parent replaces it with a fresh instance whenever a
+// different row is expanded. It's safe to snapshot `question` exactly once
+// here and treat it as fixed for this component's entire lifetime --
+// nothing below writes back to `question` itself until commit() runs
+// (explicit Save, or automatically on unmount -- see onDestroy below).
+// Snapshotting via a function, rather than reading `question` directly in
+// the $state(...) calls below, avoids Svelte's state_referenced_locally
+// warning, which exists to catch the (different) mistake of assuming a prop
+// read stays live without a {#key}/$derived -- not applicable here, since it
+// deliberately doesn't.
 function snapshotQuestion(q) {
   return {
     stem: q.question.stem,
@@ -89,7 +81,8 @@ let canAccept = $derived(correctAnswer !== null);
 
 // isDirty compares against the *live* question.question (which reflects
 // the last save, if any -- Detail stays mounted across a plain Save click,
-// only remounting on Next/Previous), so it correctly clears after saving.
+// only remounting when the parent expands a different row), so it
+// correctly clears after saving.
 let isDirty = $derived(
   status !== question.review.status ||
     points !== question.review.grade.points ||
@@ -156,136 +149,176 @@ function commit() {
   });
 }
 
+// Save and Close (below) both commit explicitly before doing anything else.
+// This onDestroy is the safety net for the one case neither covers:
+// expanding a *different* row while this one is still open, which unmounts
+// this instance from the outside (the parent Queue row's own click handler,
+// not anything in this component) with no chance to run a click handler
+// first. Committing twice in the Save/Close cases is harmless -- the second
+// call just resends the same already-saved values.
+onDestroy(commit);
+
 function handleSaveClick() {
   commit();
 }
 
-function handlePrevious() {
+function handleCloseClick() {
   commit();
-  onPrevious();
-}
-
-function handleNext() {
-  commit();
-  onNext();
-}
-
-function handleBack() {
-  commit();
-  onBack();
+  onClose();
 }
 </script>
 
 <section>
-  <h2>Review question — {question.submission.student.name}</h2>
+  <h3>Review question — {question.submission.student.name}</h3>
 
   {#if isDirty}
     <p class="dirty">Unsaved changes</p>
   {/if}
 
-  <label>
-    Bloom level:
-    <select bind:value={bloomLevel}>
-      <option value={null}>— not set —</option>
-      {#each BLOOM_LEVELS as level (level)}
-        <option value={level}>{level}</option>
-      {/each}
-    </select>
-  </label>
-  <p class="original">Original: {question.original.bloomLevel ?? "— not set —"}</p>
-
-  <label>
-    Keywords (comma-separated):
-    <input type="text" bind:value={keywordsText} />
-  </label>
-  <p class="original">Original: {question.original.keywords.join(", ")}</p>
-  {#if !isKeywordCountExpected(keywords)}
-    <p class="warning">{keywords.length} keyword(s), expected 2-4</p>
-  {/if}
-
-  <label>
-    Stem:
-    <textarea bind:value={stem}></textarea>
-  </label>
-  <p class="original">Original: {question.original.stem}</p>
-  {#if wordCount(stem) > WORD_LIMITS.stem}
-    <p class="warning">{wordCount(stem)} words, limit {WORD_LIMITS.stem}</p>
-  {/if}
-
   <fieldset>
-    <legend>Responses</legend>
-    <p class="original">
-      Original correct answer: {question.original.correctAnswer ?? "— none —"}
-    </p>
-    {#each RESPONSE_LETTERS as letter (letter)}
-      <div class="response">
-        <label>
-          <input type="radio" name="correctAnswer" value={letter} bind:group={correctAnswer} />
-          {letter} is correct
-        </label>
-        <label>
-          Response {letter}:
-          <textarea bind:value={responses[letter]}></textarea>
-        </label>
-        <p class="original">Original: {question.original.responses[letter]}</p>
-        {#if wordCount(responses[letter]) > WORD_LIMITS.response}
-          <p class="warning">
-            {wordCount(responses[letter])} words, limit {WORD_LIMITS.response}
-          </p>
-        {/if}
-        <label>
-          Feedback {letter}:
-          <textarea bind:value={feedback[letter]}></textarea>
-        </label>
-        <p class="original">Original: {question.original.feedback[letter]}</p>
-        {#if wordCount(feedback[letter]) > WORD_LIMITS.feedback}
-          <p class="warning">
-            {wordCount(feedback[letter])} words, limit {WORD_LIMITS.feedback}
-          </p>
+    <legend>Question</legend>
+
+    <div class="field-row">
+      <div class="field-col">
+        <label for="detail-bloom-level">Bloom level:</label>
+        <p class="original">Student submitted: {question.original.bloomLevel ?? "— not set —"}</p>
+        <select id="detail-bloom-level" bind:value={bloomLevel}>
+          <option value={null}>— not set —</option>
+          {#each BLOOM_LEVELS as level (level)}
+            <option value={level}>{level}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="field-col">
+        <label for="detail-keywords">Keywords (comma-separated):</label>
+        <p class="original">Student submitted: {question.original.keywords.join(", ")}</p>
+        <input id="detail-keywords" type="text" bind:value={keywordsText} />
+        {#if !isKeywordCountExpected(keywords)}
+          <p class="warning">{keywords.length} keyword(s), expected 2-4</p>
         {/if}
       </div>
-    {/each}
-  </fieldset>
+    </div>
 
-  <fieldset>
-    <legend>Grade</legend>
-    <label>
-      Points:
-      <input type="number" bind:value={points} />
-    </label>
-    <p>Out of: {pointsPossible ?? "not set"}</p>
-  </fieldset>
-
-  <fieldset>
-    <legend>Status</legend>
-    <label>
-      <input type="radio" name="status" value="pending" bind:group={status} />
-      Pending
-    </label>
-    <label>
-      <input
-        type="radio"
-        name="status"
-        value="accepted"
-        bind:group={status}
-        disabled={!canAccept}
-      />
-      Accept
-    </label>
-    <label>
-      <input type="radio" name="status" value="rejected" bind:group={status} />
-      Reject
-    </label>
-    {#if !canAccept}
-      <p class="warning">Set a correct answer before this question can be accepted.</p>
+    <label for="detail-stem">Stem:</label>
+    <p class="original">
+      Student submitted ({wordCount(question.original.stem)} words):<br />
+      {question.original.stem}
+    </p>
+    <textarea id="detail-stem" bind:value={stem}></textarea>
+    {#if wordCount(stem) > WORD_LIMITS.stem}
+      <p class="warning">{wordCount(stem)} words, limit {WORD_LIMITS.stem}</p>
     {/if}
+
+    {#if question.original.correctAnswer === null}
+      <p class="original">Student submitted correct answer: — none —</p>
+    {/if}
+    <table class="responses-table">
+      <thead>
+        <tr>
+          <th scope="col">Correct answer</th>
+          <th scope="col">Response</th>
+          <th scope="col">Feedback</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each RESPONSE_LETTERS as letter (letter)}
+          <tr>
+            <td>
+              <label>
+                <input
+                  type="radio"
+                  name="correctAnswer"
+                  value={letter}
+                  bind:group={correctAnswer}
+                />
+                {letter} is correct
+              </label>
+              {#if question.original.correctAnswer === letter}
+                <p class="original">Student submitted this as the correct answer</p>
+              {/if}
+            </td>
+            <td>
+              <p class="original">
+                Student submitted ({wordCount(question.original.responses[letter])} words):
+                <br />
+                {question.original.responses[letter]}
+              </p>
+              <label>
+                Final version:
+                <textarea bind:value={responses[letter]}></textarea>
+              </label>
+              {#if wordCount(responses[letter]) > WORD_LIMITS.response}
+                <p class="warning">
+                  {wordCount(responses[letter])} words, limit {WORD_LIMITS.response}
+                </p>
+              {/if}
+            </td>
+            <td>
+              <p class="original">
+                Student submitted ({wordCount(question.original.feedback[letter])} words):
+                <br />
+                {question.original.feedback[letter]}
+              </p>
+              <label>
+                Final version:
+                <textarea bind:value={feedback[letter]}></textarea>
+              </label>
+              {#if wordCount(feedback[letter]) > WORD_LIMITS.feedback}
+                <p class="warning">
+                  {wordCount(feedback[letter])} words, limit {WORD_LIMITS.feedback}
+                </p>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </fieldset>
+
+  <fieldset>
+    <legend>Review</legend>
+
+    <div class="field-row">
+      <div class="field-col">
+        <h4>Grade</h4>
+        <div class="grade-row">
+          <label>
+            Points:
+            <input type="number" bind:value={points} />
+          </label>
+          <span>Out of: {pointsPossible ?? "not set"}</span>
+        </div>
+      </div>
+      <div class="field-col">
+        <h4>Status</h4>
+        <label>
+          <input type="radio" name="status" value="pending" bind:group={status} />
+          Pending
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="status"
+            value="accepted"
+            bind:group={status}
+            disabled={!canAccept}
+          />
+          Accept
+        </label>
+        <label>
+          <input type="radio" name="status" value="rejected" bind:group={status} />
+          Reject
+        </label>
+        {#if !canAccept}
+          <p class="warning">Set a correct answer before this question can be accepted.</p>
+        {/if}
+      </div>
+    </div>
   </fieldset>
 
   <div class="nav">
-    <button type="button" onclick={handlePrevious} disabled={!hasPrevious}>Previous</button>
     <button type="button" onclick={handleSaveClick}>Save</button>
-    <button type="button" onclick={handleNext} disabled={!hasNext}>Next</button>
-    <button type="button" onclick={handleBack}>Back to queue</button>
+    <button type="button" onclick={handleCloseClick}>Close</button>
   </div>
 </section>
 
@@ -293,13 +326,57 @@ function handleBack() {
   fieldset {
     margin-block: 1em;
   }
-  .response {
-    margin-block-end: 0.75em;
+  fieldset h4 {
+    margin-block: 0.75em 0.25em;
+  }
+  .field-row {
+    display: flex;
+    gap: 1.5em;
+    margin-block-end: 0.5em;
+  }
+  .field-col {
+    flex: 1;
+    min-width: 0;
+  }
+  .field-col select,
+  .field-col input:not([type="radio"]) {
+    width: 100%;
+  }
+  .grade-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1em;
+  }
+  .grade-row input[type="number"] {
+    width: 5em;
+  }
+  .responses-table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+  }
+  .responses-table th,
+  .responses-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.4em 0.6em;
+    border-bottom: 1px solid #ddd;
+  }
+  .responses-table th:first-child,
+  .responses-table td:first-child {
+    width: 20%;
+  }
+  .responses-table th:not(:first-child),
+  .responses-table td:not(:first-child) {
+    width: 40%;
   }
   textarea {
     display: block;
     width: 100%;
     max-width: 40em;
+  }
+  .responses-table textarea {
+    max-width: none;
   }
   .dirty {
     color: #8a6100;

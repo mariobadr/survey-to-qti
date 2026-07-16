@@ -1,4 +1,6 @@
 <script>
+import Detail from "./Detail.svelte";
+
 /**
  * @typedef {object} Props
  * @property {object[]} questions - Valid Question objects from parseSurveyCsv
@@ -7,12 +9,10 @@
  *   filter selection when returning from the detail view.
  * @property {number | null} [pointsPossible] - The single points-possible
  *   value shared across every question (Planned rework item 4), used to
- *   format the Grade column.
- * @property {(id: string, workingSetIds: string[]) => void} onSelect -
- *   Called when the TA clicks a question to open the detail view (Screen 3),
- *   with that question's `id` and the ids of every question currently
- *   passing the filter (the detail view's Next/Previous navigate this
- *   frozen set, per Section 5).
+ *   format the Grade column and passed through to the expanded Detail view.
+ * @property {(id: string, updates: object) => void} onSave - Passed straight
+ *   through to whichever row is currently expanded (Detail); commits that
+ *   row's draft back into the shared question data.
  */
 
 /** @type {Props} */
@@ -20,7 +20,7 @@ let {
   questions,
   statusFilter = $bindable("all"),
   pointsPossible = null,
-  onSelect,
+  onSave,
 } = $props();
 
 const STATUSES = ["pending", "accepted", "rejected"];
@@ -33,6 +33,18 @@ let filtered = $derived(
     (q) => statusFilter === "all" || q.review.status === statusFilter,
   ),
 );
+
+// The Question Review view (Planned rework item 1): at most one row is
+// expanded in place at a time, showing the same Detail component that used
+// to live on a separate page. Toggling to a different id (or back to null)
+// unmounts whichever Detail was expanded -- its onDestroy hook commits that
+// row's draft on the way out, so switching or closing never loses work,
+// mirroring the old auto-save-on-navigate behavior without a separate page.
+let expandedId = $state(null);
+
+function handleToggle(id) {
+  expandedId = expandedId === id ? null : id;
+}
 
 /**
  * Format a question's points for display in the queue table, against the
@@ -86,8 +98,12 @@ function formatGrade(points) {
               <button
                 type="button"
                 class="row-select"
-                onclick={() => onSelect(q.id, filtered.map((f) => f.id))}
+                onclick={() => handleToggle(q.id)}
+                aria-expanded={q.id === expandedId}
               >
+                <span class="toggle-icon" aria-hidden="true">
+                  {q.id === expandedId ? "-" : "+"}
+                </span>
                 {q.submission.student.name}
               </button>
             </td>
@@ -95,6 +111,18 @@ function formatGrade(points) {
             <td>{q.review.status}</td>
             <td>{formatGrade(q.review.grade.points)}</td>
           </tr>
+          {#if q.id === expandedId}
+            <tr>
+              <td colspan="4">
+                <Detail
+                  question={q}
+                  {pointsPossible}
+                  {onSave}
+                  onClose={() => (expandedId = null)}
+                />
+              </td>
+            </tr>
+          {/if}
         {/each}
       </tbody>
     </table>
@@ -113,6 +141,8 @@ function formatGrade(points) {
     border-bottom: 1px solid #ddd;
   }
   .row-select {
+    display: inline-flex;
+    align-items: baseline;
     background: none;
     border: none;
     padding: 0;
@@ -120,6 +150,14 @@ function formatGrade(points) {
     text-decoration: underline;
     cursor: pointer;
     font: inherit;
+  }
+  .toggle-icon {
+    display: inline-block;
+    width: 1em;
+    margin-right: 0.4em;
+    font-weight: bold;
+    text-decoration: none;
+    text-align: center;
   }
   .filters {
     display: flex;
