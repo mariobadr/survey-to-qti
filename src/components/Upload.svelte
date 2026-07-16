@@ -60,7 +60,12 @@ function describeWarning(warning) {
   <h2>Upload</h2>
   <p>Select the Canvas survey CSV export to review.</p>
 
-  <input type="file" accept=".csv" onchange={handleFileChange} />
+  <input
+    type="file"
+    accept=".csv"
+    aria-label="Canvas survey CSV export"
+    onchange={handleFileChange}
+  />
 
   {#if readError}
     <p class="error">Couldn't read "{fileName}": {readError}</p>

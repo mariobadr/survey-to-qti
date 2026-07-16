@@ -381,3 +381,17 @@ Approach:
   `noUnusedVariables` for `*.svelte` files — Biome 2.5's Svelte support
   doesn't yet track script variables that are only referenced from the
   template, so it was flagging genuinely-used state/props as dead code.
+- 2026-07-16 — Added component tests for the Upload screen
+  (`src/components/__tests__/Upload.test.js`, `@testing-library/svelte` +
+  `@testing-library/user-event` + `@testing-library/jest-dom`, jsdom
+  environment). These are committed, repeatable tests distinct from the
+  ad hoc real-browser checks used during development — they cover the
+  same ground (fixture parse summary, Continue enabled/disabled, dedup
+  behavior) but don't replace real-browser verification for issues that
+  only show up there (e.g. the `file://` CORS issue in Section 2).
+  Two real snags fixed along the way, not just this project's config:
+  Svelte 5 resolves to its server build under vitest unless
+  `resolve.conditions: ["browser"]` is forced (`vite.config.js`, gated on
+  `process.env.VITEST` so `dev`/`build` are unaffected), and
+  `import.meta.url` isn't a real `file://` URL under jsdom, so the fixture
+  path is resolved from `process.cwd()` instead in this test file.

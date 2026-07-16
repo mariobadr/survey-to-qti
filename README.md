@@ -26,10 +26,15 @@ Since `vite` is a devDependency, its CLI can also be invoked directly instead of
 npm test
 ```
 
-Runs the vitest suite once (`src/csv/__tests__/`) and exits.
+Runs the vitest suite once and exits.
 Use `npm run dev-test` instead to run vitest in watch mode while iterating.
 
+Two kinds of tests live side by side: plain-Node tests for the CSV parser (`src/csv/__tests__/`), and component tests for the Svelte UI (`src/components/__tests__/`) using `@testing-library/svelte` in a jsdom environment.
+Component test files opt into jsdom individually with a `// @vitest-environment jsdom` comment at the top, so the parser tests keep running under the (faster, closer-to-real) default Node environment.
+
 The CSV parser tests run against the fixture at `fixtures/fabricated-survey-export.csv` — see below for how that file is produced.
+
+These are unit/component tests, not end-to-end tests — they don't catch issues that only show up in a real browser (e.g. the `file://` CORS issue documented in PROJECT_SPEC.md Section 2). Manual verification in an actual browser is still worthwhile for UI changes.
 
 ## Linting
 
