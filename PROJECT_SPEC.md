@@ -313,10 +313,35 @@ Approach:
 
 ## 8. Persistence
 
-- Autosave continuously to `localStorage` or `IndexedDB` after every edit,
-  grade, or status change, so a refresh/crash doesn't lose review progress.
-- Provide a manual "export progress as JSON" / "load progress from JSON"
-  pair as a backup/portability option, independent of the two main exports.
+Implemented in [`src/persistence/session.js`](src/persistence/session.js).
+
+- **Autosave to `localStorage` only** — no export/import, no file ever
+  written anywhere else. Deliberate: this data can include sensitive
+  student information, and a file (e.g. a JSON backup) is far easier to
+  mishandle — synced to cloud storage, emailed, left in Downloads — than
+  data that never leaves the browser's storage for this site.
+  `localStorage` over IndexedDB: plenty of headroom for text-only review
+  data, and a synchronous API needs no wrapper library. Persists on every
+  commit (Save/Close/auto-commit-on-unmount all flow through `App.svelte`'s
+  `handleSave`) and on every `pointsPossible`/`statusFilter` change, via a
+  `$effect` in `App.svelte` — not on in-progress keystrokes inside an open
+  (uncommitted) row, since those never touch shared state until commit
+  anyway. If an autosave attempt fails (quota, private browsing,
+  unavailable), an unobtrusive banner tells the TA rather than failing
+  silently — see below.
+- **Resume on load**: if a saved session exists, the TA sees a "Resume
+  previous session? / Start over" prompt before Upload — no silent
+  auto-resume, and no separate confirmation dialog either, since choosing
+  "Start over" *is* the confirmation that discards the old session.
+- **Autosave-failure notice**: a small, non-blocking banner (fixed corner
+  of the screen, `role="status"` so screen readers announce it politely
+  without interrupting) appears whenever the most recent autosave attempt
+  failed, and disappears again automatically once one succeeds — no modal,
+  no dismiss button, since it's just informational and self-corrects.
+- Saved sessions are schema-versioned (`schemaVersion` in the stored JSON);
+  a version mismatch is treated as nothing-to-resume rather than guessed
+  at, so a future data model change (e.g. Planned rework item 6) can't
+  silently misread an old session.
 
 ## 9. Tech stack
 
@@ -377,7 +402,8 @@ Approach:
    still open and still reopens part of step 2 (the CSV parser's
    attempt-dedup logic) when it's tackled — the biggest and
    least-designed piece of this step.
-5. Autosave (localStorage/IndexedDB)
+5. ~~Autosave (localStorage)~~ **Done** — see Section 8 and
+   [`src/persistence/session.js`](src/persistence/session.js).
 6. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
    flows, cover these cases the spike didn't exercise:
@@ -545,3 +571,20 @@ Approach:
   (less repetition — the table's row/column headers already say which
   letter and field); added each original submission's word count next to
   Stem/Response/Feedback; added a +/- expand icon to each row.
+- 2026-07-16 — Built Section 10 step 5 (Section 8: Persistence) —
+  `src/persistence/session.js`, plus a small resume prompt in `App.svelte`.
+  Decided localStorage over IndexedDB (Section 8 left this open); autosave
+  persists on commit, not on in-progress keystrokes; resuming a saved
+  session requires an explicit choice ("Resume" / "Start over") rather than
+  silently auto-resuming or silently discarding. Originally also built a
+  manual JSON export/import backup path (Section 8 had called for one), but
+  removed it once flagged as a real privacy concern for a tool handling
+  student data — a downloaded file is far easier to end up somewhere it
+  shouldn't (cloud-synced Downloads folder, email, etc.) than data that
+  never leaves the browser's own storage. `localStorage` autosave stays;
+  Section 8 no longer mentions a JSON path at all. Added a `role="status"`
+  banner that appears if an autosave attempt fails (`saveSession` now
+  returns a boolean) and clears itself once one succeeds. Added
+  `src/persistence/__tests__/session.test.js` and `src/__tests__/App.test.js`
+  (new — App.svelte's first test file) covering the resume prompt,
+  Resume/Start over, autosave-after-continue, and the failure banner.
