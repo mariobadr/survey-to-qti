@@ -5,17 +5,25 @@ import { BLOOM_LEVELS } from "../csv/fieldNormalization.js";
  * @typedef {object} Props
  * @property {object[]} questions - Valid Question objects from parseSurveyCsv
  *   (Section 4's data model), unfiltered.
- * @property {(id: string) => void} onSelect - Called with a question's `id`
- *   when the TA clicks it to open the detail view (Screen 3).
+ * @property {string} [statusFilter] - Bindable; lets the caller restore the
+ *   filter selection when returning from the detail view.
+ * @property {string} [bloomFilter] - Bindable, same reason as statusFilter.
+ * @property {(id: string, workingSetIds: string[]) => void} onSelect -
+ *   Called when the TA clicks a question to open the detail view (Screen 3),
+ *   with that question's `id` and the ids of every question currently
+ *   passing the filters (the detail view's Next/Previous navigate this
+ *   frozen set, per Section 5).
  */
 
 /** @type {Props} */
-let { questions, onSelect } = $props();
+let {
+  questions,
+  statusFilter = $bindable("all"),
+  bloomFilter = $bindable("all"),
+  onSelect,
+} = $props();
 
 const STATUSES = ["pending", "accepted", "rejected"];
-
-let statusFilter = $state("all");
-let bloomFilter = $state("all");
 
 // `questions` filtered by the current statusFilter/bloomFilter selections;
 // "all" for either one means that dimension isn't filtered.
@@ -87,7 +95,11 @@ function formatGrade(grade) {
         {#each filtered as q (q.id)}
           <tr>
             <td>
-              <button type="button" class="row-select" onclick={() => onSelect(q.id)}>
+              <button
+                type="button"
+                class="row-select"
+                onclick={() => onSelect(q.id, filtered.map((f) => f.id))}
+              >
                 {q.submission.student.name}
               </button>
             </td>

@@ -116,6 +116,6 @@ describe("Queue", () => {
     await userEvent.click(screen.getByRole("button", { name: "Bob Brown" }));
 
     expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledWith("s2");
+    expect(onSelect).toHaveBeenCalledWith("s2", ["s1", "s2", "s3", "s4"]);
   });
 });

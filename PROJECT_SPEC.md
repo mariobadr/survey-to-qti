@@ -164,9 +164,32 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 3. **Detail / review view** — one question at a time:
    - Editable stem, four responses, four feedback fields
    - Correct-answer selector
-   - Grade input (points) + comment
-   - Accept / Reject toggle
-   - Next / Previous navigation between submissions
+   - Also editable, despite not being in the original bullet list: Bloom
+     level (dropdown) and keywords (comma-separated text) — no reason they
+     should be locked when everything else is editable
+   - Grade input: both points *and* points-possible are per-question fields
+     (the CSV never supplies a ceiling — see Section 4), plus a comment
+   - Status: an explicit three-way Pending / Accept / Reject control
+     (Section 4's data model has three states, not two) — Accept is
+     disabled whenever the correct-answer selector is unset, since an
+     accepted question with no correct answer would produce a broken QTI
+     export later (Section 6); nothing else blocks Accept
+   - Next / Previous navigate a *frozen* snapshot of whichever questions
+     matched the Queue's filters at the moment the TA clicked in — editing
+     a question mid-review so it no longer matches those filters doesn't
+     remove it from Next/Previous for the rest of that session
+   - Editing model: every field (content and grade/status/comment) loads
+     into local draft state on open; nothing writes back to the shared
+     question data until commit — either the explicit Save button, or
+     silently on Next/Previous/Back-to-queue (so navigating never loses
+     work, and Save is really just a manual checkpoint)
+   - `wasEdited` (Section 4) is computed from content fields only (stem,
+     responses, feedback, correct answer, Bloom level, keywords) — grading
+     and accept/reject never set it. It's monotonic: once a question has
+     been edited from its original submission, later saving it back
+     unchanged doesn't un-flag it
+   - Returning to the queue restores whatever status/Bloom-level filters
+     were active, rather than resetting to "All"
 4. **Export** — summary counts (accepted / rejected / pending), two actions:
    - "Download QTI package" (accepted questions only)
    - "Download gradebook CSV" (all graded submissions)
@@ -286,17 +309,23 @@ Approach:
    exists yet, so tested against a fabricated fixture
    ([`tools/generate_fixture_csv.py`](tools/generate_fixture_csv.py)) rather
    than a hand-written one.
-3. Review queue + detail UI (no persistence yet)
-   - Upload screen (Screen 1) **done** — see
+3. ~~Review queue + detail UI (no persistence yet)~~ **Done** — Screens 1-3
+   of Section 5, all still without persistence (that's step 4):
+   - Upload screen (Screen 1) — see
      [`src/components/Upload.svelte`](src/components/Upload.svelte). Wired
      to `parseSurveyCsv`; shows the parse summary and blocks continuing only
      on structurally invalid rows or zero valid questions, per Section 5.
-   - Queue/list view (Screen 2) **done** — see
+   - Queue/list view (Screen 2) — see
      [`src/components/Queue.svelte`](src/components/Queue.svelte). Table of
      student/Bloom level/status/grade, filterable by status and Bloom
-     level; clicking a row selects it (`App.svelte` swaps in a placeholder
-     until the detail view exists).
-   - Detail/review view (Screen 3) not built yet.
+     level; clicking a row opens the detail view with that filtered set as
+     the navigation working set (see Screen 3 below).
+   - Detail/review view (Screen 3) — see
+     [`src/components/Detail.svelte`](src/components/Detail.svelte). See
+     Section 5 for the full list of decisions made building this (editable
+     Bloom level/keywords, three-way status with Accept gating, frozen
+     working-set navigation, draft-until-commit editing, content-only
+     monotonic `wasEdited`).
 4. Autosave (localStorage/IndexedDB)
 5. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
@@ -417,3 +446,33 @@ Approach:
   — "points / pointsPossible" and points-only — get real coverage. Covers
   unfiltered rendering, filtering by Bloom level, by status, the
   no-matches empty state, and `onSelect` firing with the right id.
+- 2026-07-16 — Built the Detail/review view (Section 5, Screen 3) —
+  `src/components/Detail.svelte` — completing Section 10 step 3. Several
+  product decisions not fully pinned down by the original spec text were
+  resolved before building (see Section 5 for the final rules): grade
+  points *and* points-possible are both per-question fields; status is an
+  explicit three-way Pending/Accept/Reject control gated on a correct
+  answer being set; Next/Previous navigate a working set frozen at the
+  moment the TA entered the detail view, not a live-recomputed filter
+  match; every field loads into local draft state, committed either via
+  Save or silently on any navigation; `wasEdited` is content-only and
+  monotonic. `Queue.svelte` updated to make `statusFilter`/`bloomFilter`
+  bindable (so `App.svelte` can restore them on "Back to queue" instead of
+  resetting) and to pass the filtered id list to `onSelect`.
+  Verified end-to-end in a real browser, which caught two real bugs unit
+  tests alone wouldn't have: (1) a Svelte 5 compiler warning
+  (`state_referenced_locally`) from reading a `$props()` value directly
+  into `$state(...)` initializers — expected here, since `App.svelte`
+  remounts `Detail` fresh per question via `{#key}`, but the compiler
+  can't see that guarantee; fixed by wrapping the one-time snapshot read in
+  `untrack()` rather than suppressing the warning. (2) The "unsaved
+  changes" indicator never cleared after a successful Save, because it
+  compared the draft against a snapshot frozen at mount instead of the
+  live (post-save) question data — content-change detection needs *two*
+  different reference points depending on purpose: the live question for
+  "do I currently have unsaved changes," and the session-start snapshot
+  for "was anything changed this session" (which `wasEdited`'s monotonic
+  OR-in logic needs). Added `src/components/__tests__/Detail.test.js` (11
+  tests) covering the draft/save model, the Accept gate, `wasEdited`
+  scope and monotonicity, and Previous/Next/Back all committing before
+  navigating.
