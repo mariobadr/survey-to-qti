@@ -1,6 +1,14 @@
 <script>
 import { parseSurveyCsv } from "../csv/parseSurveyCsv.js";
 
+/**
+ * @typedef {object} Props
+ * @property {(questions: object[]) => void} onParsed - Called with the
+ *   valid, deduped Question objects once the TA clicks "Continue to review
+ *   queue" (Section 5, Screen 1 -> Screen 2).
+ */
+
+/** @type {Props} */
 let { onParsed } = $props();
 
 let fileName = $state(null);
@@ -18,6 +26,13 @@ let canContinue = $derived(
     result.questions.length > 0,
 );
 
+/**
+ * Read the chosen file and parse it as a Canvas survey CSV export,
+ * updating `result` (or `readError` if the file can't even be read as text).
+ *
+ * @param {Event & { currentTarget: HTMLInputElement }} event - The file
+ *   input's change event.
+ */
 async function handleFileChange(event) {
   const file = event.currentTarget.files?.[0];
   if (!file) return;
@@ -34,10 +49,21 @@ async function handleFileChange(event) {
   }
 }
 
+/**
+ * Hand the parsed, valid questions off to the parent (App.svelte) so it can
+ * move on to the review queue. Only reachable when `canContinue` is true.
+ */
 function handleContinue() {
   onParsed(result.questions);
 }
 
+/**
+ * Format one parseSurveyCsv warning (see parseSurveyCsv.js's collectWarnings)
+ * into TA-readable text.
+ *
+ * @param {object} warning - One entry from `result.summary.warnings`.
+ * @returns {string}
+ */
 function describeWarning(warning) {
   switch (warning.type) {
     case "unexpectedBloomLevel":

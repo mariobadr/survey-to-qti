@@ -1,6 +1,15 @@
 <script>
 import { BLOOM_LEVELS } from "../csv/fieldNormalization.js";
 
+/**
+ * @typedef {object} Props
+ * @property {object[]} questions - Valid Question objects from parseSurveyCsv
+ *   (Section 4's data model), unfiltered.
+ * @property {(id: string) => void} onSelect - Called with a question's `id`
+ *   when the TA clicks it to open the detail view (Screen 3).
+ */
+
+/** @type {Props} */
 let { questions, onSelect } = $props();
 
 const STATUSES = ["pending", "accepted", "rejected"];
@@ -8,6 +17,8 @@ const STATUSES = ["pending", "accepted", "rejected"];
 let statusFilter = $state("all");
 let bloomFilter = $state("all");
 
+// `questions` filtered by the current statusFilter/bloomFilter selections;
+// "all" for either one means that dimension isn't filtered.
 let filtered = $derived(
   questions.filter((q) => {
     if (statusFilter !== "all" && q.review.status !== statusFilter)
@@ -18,6 +29,13 @@ let filtered = $derived(
   }),
 );
 
+/**
+ * Format a question's grade for display in the queue table.
+ *
+ * @param {{ points: number | null, pointsPossible: number | null }} grade -
+ *   `review.grade` from a Question object.
+ * @returns {string}
+ */
 function formatGrade(grade) {
   if (grade.points === null) return "Not graded";
   return grade.pointsPossible !== null
