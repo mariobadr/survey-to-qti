@@ -89,14 +89,22 @@ question is editable during review, review state is written continuously).
   review: {
     grade: {
       points: number | null,
-      pointsPossible: number | null,  // not present in the CSV; null until the review UI sets it (Section 10 step 3)
-      comment: string
+      pointsPossible: number | null,  // PLANNED CHANGE: becomes a single value shared by
+                                       // every question, not per-question — see "Planned
+                                       // rework" below
+      comment: string                 // PLANNED CHANGE: to be removed entirely — see
+                                       // "Planned rework" below
     },
     status: "pending" | "accepted" | "rejected",
     wasEdited: boolean          // true if TA modified any field from the original submission
   }
 }
 ```
+
+PLANNED CHANGE (see "Planned rework" below): a permanent `original` snapshot of the
+content fields (`stem`/`responses`/`feedback`/`correctAnswer`/`bloomLevel`/`keywords`) as
+first parsed, kept alongside `question` and never mutated — today there's no persisted
+original to compare against, only `wasEdited`'s boolean flag.
 
 ### CSV → data model mapping
 
@@ -194,6 +202,79 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
    - "Download QTI package" (accepted questions only)
    - "Download gradebook CSV" (all graded submissions)
 
+### Planned rework (from hands-on TA-perspective feedback, not yet implemented)
+
+Trying Screens 1-3 end to end (all built per Section 10 step 3) surfaced changes to make
+before continuing further. None of these are implemented yet — documenting them here so
+the reasoning survives even if a different session picks this up. Screen 1 (Upload) is
+fine as-is; nothing below touches it. Items 1-5 are settled decisions; item 6 (all
+attempts, not just one) is a bigger, not-fully-designed change — see its own note on scope.
+
+1. **Merge Queue and Detail into one screen, called the Question Review view — no more
+   separate "page."** Instead of clicking a row to navigate to a separate detail view
+   (today: `App.svelte` swaps `<Queue>` out for `<Detail>`), clicking a student expands
+   their row in place within the table, showing the same fields Detail currently shows.
+   No "move to next row" affordance survives this merge — no auto-advance, no Next/Previous
+   equivalent at all, confirmed.
+   Impact: **removes Next/Previous navigation and the frozen-working-set mechanism** built
+   for it (the "Next / Previous navigate a *frozen* snapshot..." bullet above, and the
+   `workingSetIds`/`{#key}`-remount machinery in `App.svelte`) — there's no longer a
+   separate page to navigate between.
+2. **Show the original CSV value next to the editable field, not just an edited/not-edited
+   flag.** Right now `wasEdited` (Section 4) is a single boolean with no way to see *what*
+   changed. The detail view should show, per content field, both the original submitted
+   value (as a read-only label) and the current editable value (the text field already
+   shown).
+   Impact: requires the data model to retain a **permanent, unmutated copy of the original
+   parsed submission** (see the `original` note added to Section 4) — today the only
+   "original" reference is `Detail.svelte`'s local `opened` snapshot, which is ephemeral
+   and reset on every (re)mount, never meant to survive across sessions. A persisted
+   `original` would also let `wasEdited` become a simple live diff against it, replacing
+   the monotonic OR-based computation built specifically to work around not having one.
+3. **Remove the comment field from the grade panel.** There's no mechanism to get a
+   comment into Canvas's gradebook CSV import (Section 7's column list is Student/ID/SIS
+   User ID/SIS Login ID/Section plus one score column per assignment — no comment column),
+   so a comment typed here would go nowhere. Remove `review.grade.comment` from the data
+   model and drop the comment textarea from the detail view.
+4. **`pointsPossible` becomes a single fixed value, not a per-question field, edited in one
+   place.** Reverses an earlier decision (see Changelog) — "per-question entry" was picked
+   when this was first asked about, but that was based on a misunderstanding; every
+   question should be graded out of the same denominator. Resolved: it's an editable field
+   near the top of the (merged) Question Review view — set once there, not per question —
+   and shown read-only within each individual question, so the TA always sees the
+   denominator without being able to change it from inside a specific question. `points`
+   (the score earned) stays editable per-question as before; only `pointsPossible` changes.
+   Note this is a different "points" concept from Section 11's "whether per-question point
+   values are needed" item — that one is about Section 6's QTI-export points-per-question
+   (the accepted question's weight in the real Canvas quiz), a separate setting from this
+   review-grade `pointsPossible`.
+5. **Remove the Bloom-level filter from the Queue/Question Review view.** Not useful in
+   practice; drop the dropdown and the filtering logic behind it. The status filter stays.
+6. **Parse and show every attempt, not just the earliest one — bigger change, not fully
+   designed yet.** Currently `parseSurveyCsv` drops every attempt but the earliest per
+   student (Section 4's "Duplicate attempts" rule) and logs what it dropped. Instead, every
+   complete, structurally-valid attempt should be parsed and shown, grouped under the
+   student — e.g. each attempt as a "subrow" under a parent student row in the Question
+   Review view — and the TA chooses which attempt (if any) to accept, rather than the
+   parser silently picking the earliest one for them.
+   This is bigger than items 1-5 and touches work already marked done, not just planned
+   work:
+   - **Reopens Section 10 step 2 (CSV parser), not just step 4.** The parser's dedup logic
+     (`src/csv/parseSurveyCsv.js`, the `duplicateAttemptDropped` warning type, the
+     `attempt` field's "kept after dedup" framing in Section 4) all assume one row survives
+     per student — all of that needs revisiting, not just the UI.
+   - **`id` can no longer be `== submission.student.sisLoginId`** (Section 4) once a
+     student can have multiple entries — needs a composite key (e.g. sisLoginId + attempt)
+     or a synthetic id.
+   - **Whether the data model itself groups by student** (an array of students, each with
+     an array of attempts) **or stays flat** (one array of attempt-questions, grouped only
+     in the UI layer by `sisLoginId`) isn't decided.
+   - **What "accepted" means across multiple attempts from the same student isn't decided**
+     — can more than one attempt from the same student be accepted at once, or should the
+     UI warn/prevent that once one is already accepted? Not specified.
+   - **Section 7's gradebook export** matches one grade per student; with multiple
+     attempts, which attempt's grade counts isn't decided.
+
 ## 6. QTI export via text2qti + Pyodide
 
 **Do not hand-build QTI XML.** Use the existing `text2qti` Python package
@@ -252,7 +333,7 @@ full findings.
   Quercus sandbox course and loaded correctly as a quiz.
 
 Not yet exercised by the spike — carried forward as test cases for full QTI
-export in [Section 10, step 5](#10-build-order-recommended).
+export in [Section 10, step 6](#10-build-order-recommended).
 
 ## 7. Gradebook CSV export
 
@@ -308,9 +389,11 @@ Approach:
    **Done** — see Section 4 and [`src/csv/`](src/csv/). No real submission
    exists yet, so tested against a fabricated fixture
    ([`tools/generate_fixture_csv.py`](tools/generate_fixture_csv.py)) rather
-   than a hand-written one.
+   than a hand-written one. **Partially reopened by step 4** — the
+   attempt-dedup logic here assumes one attempt survives per student; see
+   "Planned rework" item 6 (Section 5).
 3. ~~Review queue + detail UI (no persistence yet)~~ **Done** — Screens 1-3
-   of Section 5, all still without persistence (that's step 4):
+   of Section 5, all still without persistence (that's step 5):
    - Upload screen (Screen 1) — see
      [`src/components/Upload.svelte`](src/components/Upload.svelte). Wired
      to `parseSurveyCsv`; shows the parse summary and blocks continuing only
@@ -326,8 +409,17 @@ Approach:
      Bloom level/keywords, three-way status with Accept gating, frozen
      working-set navigation, draft-until-commit editing, content-only
      monotonic `wasEdited`).
-4. Autosave (localStorage/IndexedDB)
-5. Full QTI export (wire the reviewed/accepted data into the text2qti
+4. Rework Queue/Detail into the Question Review view per "Planned rework"
+   (Section 5) — not started. Doing this before step 5 (Autosave) rather
+   than after, since building autosave against a UI/data model that's about
+   to change (merged Queue+Detail, persisted `original` snapshot, dropped
+   `grade.comment`, non-per-question `pointsPossible`, no Bloom-level
+   filter) would mean redoing autosave work too. Includes reopening parts
+   of step 2 (the CSV parser) that assumed one attempt survives per
+   student — see "Planned rework" item 6, the biggest and least-designed
+   piece of this step.
+5. Autosave (localStorage/IndexedDB)
+6. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
    flows, cover these cases the spike didn't exercise:
    - Multi-question quizzes (spike only built a single question)
@@ -342,7 +434,7 @@ Approach:
      `subprocess`, which doesn't exist in Pyodide — this project's plain
      multiple-choice format shouldn't need them, but the export builder
      should not accidentally trigger them
-6. Gradebook CSV merge/export (needs a real gradebook CSV sample to finalize
+7. Gradebook CSV merge/export (needs a real gradebook CSV sample to finalize
    column handling)
 
 ## 11. Open items still to resolve once real files are available
@@ -379,7 +471,7 @@ Approach:
   Moved spike code to `spikes/text2qti-spike/`. Carried forward untested
   cases (multi-question quizzes, per-question points, special characters,
   confirming LaTeX/subprocess code paths stay dormant) as test cases for
-  Section 10 step 5.
+  Section 10 step 6.
 - 2026-07-16 — Built the Step 2 CSV parser (`src/csv/`) against real column
   layout knowledge from an actual Canvas header export (Section 4). No real
   submission exists yet, so `tools/generate_fixture_csv.py` generates a
@@ -476,3 +568,32 @@ Approach:
   tests) covering the draft/save model, the Accept gate, `wasEdited`
   scope and monotonicity, and Previous/Next/Back all committing before
   navigating.
+- 2026-07-16 — Trying Screens 1-3 end to end surfaced four changes, captured
+  as "Planned rework" (Section 5) but not yet implemented: merge Queue and
+  Detail into one screen (row expands in place, dropping Next/Previous and
+  the frozen-working-set navigation built for it); show the original CSV
+  value alongside each editable field, not just the `wasEdited` boolean
+  (needs a permanent `original` snapshot in the data model — Section 4 —
+  which would also let `wasEdited` become a live diff instead of the
+  monotonic OR-based computation); drop `review.grade.comment` entirely,
+  since Section 7's gradebook CSV import has no comment column for it to
+  reach; and reverse the "per-question `pointsPossible`" decision from
+  earlier today back to a single value shared by all questions, shown
+  read-only in the detail view rather than edited there. Section 10's
+  build order updated: this rework is now step 4, ahead of Autosave (now
+  step 5), so autosave isn't built against a data model/UI about to
+  change.
+- 2026-07-16 — Follow-up to the above, resolving two open questions and
+  adding two more items to "Planned rework" (Section 5): confirmed no
+  "move to next row" affordance survives the Queue/Detail merge (item 1)
+  — no auto-advance at all; confirmed `pointsPossible` (item 4) is edited
+  in one place near the top of the merged view (now named the Question
+  Review view) and shown read-only per question. New: (5) drop the
+  Bloom-level filter, it's not useful in practice; (6) parse and show
+  every attempt per student instead of silently keeping only the
+  earliest, with the TA choosing which to accept — flagged as
+  meaningfully bigger and not fully designed yet (composite id scheme,
+  flat-vs-grouped data model, cross-attempt accept semantics, and which
+  attempt's grade reaches the gradebook are all still open). This item
+  also reopens part of Section 10 step 2 (the CSV parser's attempt-dedup
+  logic), not just step 4 — step 2 annotated accordingly.
