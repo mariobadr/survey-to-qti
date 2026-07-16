@@ -7,7 +7,10 @@
     "test": "vitest run",
     "dev-test": "vitest",
     "lint": "biome check .",
-    "lint-fix": "biome check --write ."
+    "lint-fix": "biome check --write .",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "repository": {
     "type": "git",
@@ -26,6 +29,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "svelte": "^5.56.5",
+    "vite": "^8.1.5",
     "vitest": "^4.1.10"
   }
 }

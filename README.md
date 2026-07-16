@@ -9,6 +9,17 @@ See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full spec.
 npm install
 ```
 
+## Running the app
+
+```
+npm run dev
+```
+
+Starts the Vite dev server.
+`npm run build` produces the static `dist/` output; `npm run preview` serves that build locally to sanity-check it.
+
+Since `vite` is a devDependency, its CLI can also be invoked directly instead of through an npm script, e.g. `npx vite`, `npx vite build`, `npx vite preview` — these are exactly what the scripts above run.
+
 ## Running the tests
 
 ```

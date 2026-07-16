@@ -16,7 +16,8 @@ The teaching team (likely a Teaching Assistant) needs a tool to:
 
 - **No server, no backend.** The entire app runs client-side in the browser.
   Nothing is transmitted anywhere.
-  This is a static app (can be opened as a local HTML file or hosted as static files).
+  This is a static app: `npm run build` produces static files (`dist/`) meant to be hosted as static files (e.g. GitHub Pages) and opened via a URL — no compute, no backend, just static hosting.
+  Not opened via double-clicking a local `index.html` file: Vite's build output uses ES module `<script>` tags, which browsers refuse to load over `file://` (confirmed — this blocks with a CORS error). The TA is given a URL to click instead of a local file to double-click, which still satisfies "every action is a click in the browser" below.
 - **Single TA, single browser session.** No multi-user sync or merge needed.
 - **TA is not technically savvy.** No command-line steps, no manual file conversion, no "run this script" instructions.
 - Every action is a click in the browser.
@@ -251,9 +252,16 @@ Approach:
 
 ## 9. Tech stack
 
-- Vanilla JS or React (React recommended for the review-queue state
-  management) — single-page app, no build server required to run it (can be
-  opened as a static HTML file or served locally)
+- **Svelte** (via Vite) for the review-queue UI. Decided over React: nothing
+  in this spec needs React's component ecosystem — no rich datepickers,
+  drag-and-drop, charting, or React-only SDKs, just a filterable table, a
+  form, and two download buttons — so React's larger ecosystem doesn't buy
+  anything here, and Svelte's plainer reactivity (assignment instead of
+  `useState`/`useEffect`) means less boilerplate for this size of app. Built
+  with Vite for the dev server and `.svelte`-file compilation; the
+  production build (`npm run build`) is static files with no backend/compute
+  (Section 2's constraint), but must be hosted (e.g. GitHub Pages) rather
+  than opened via a local `file://` URL — see Section 2 for why.
 - **PapaParse** — CSV parsing (survey export and gradebook template)
 - **Pyodide** — runs `text2qti` client-side for QTI generation
 - **JSZip** — only needed if any additional client-side zipping is required
@@ -338,3 +346,14 @@ Approach:
   not) documented with JSDoc. Added a TODO (Section 11) to re-run the parser
   against the first real export and spot-check it before trusting it for
   grading.
+- 2026-07-16 — Decided Svelte (via Vite) over React for the review UI
+  (Section 9): nothing in this spec needs React's ecosystem, and Svelte's
+  plainer reactivity fits a small filterable-table-and-form app better.
+  Added Biome for linting/formatting (`npm run lint` / `lint-fix`).
+- 2026-07-16 — Scaffolded the Vite + Svelte app (`index.html`, `src/main.js`,
+  `src/App.svelte`, `vite.config.js`; `npm run dev` / `build` / `preview`).
+  Verifying the build (not just running it) surfaced a real conflict with
+  Section 2: Vite's ES module output can't be opened via `file://`
+  (confirmed — blocked by CORS). Decided to require hosted static files
+  (e.g. GitHub Pages) instead of double-click-to-open; Section 2 updated to
+  match.
