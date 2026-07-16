@@ -50,29 +50,91 @@ Canvas Survey CSV (exported by instructor from the graded survey)
 
 One object per submitted question:
 
+Fields are grouped by kind — how/when it arrived (`submission`), the
+content being reviewed (`question`), and the TA's in-progress review state
+(`review`) — rather than flat, since those three groups change at different
+times and for different reasons (submission is fixed at parse time,
+question is editable during review, review state is written continuously).
+
 ```js
 {
-  id: string,                 // stable unique id, e.g. row index or generated uuid
-  student: {
-    name: string,             // as it appears in the Canvas export
-    sisLoginId: string,       // needed later for gradebook CSV matching
-    canvasId: string
+  id: string,                   // == submission.student.sisLoginId; one graded survey submission per student
+
+  submission: {
+    student: {
+      name: string,             // as it appears in the Canvas export
+      sisLoginId: string,       // needed later for gradebook CSV matching (Section 7)
+      canvasId: string          // Canvas internal user ID; unused during review, kept for later matching
+    },
+    section: {
+      name: string,              // needed later for gradebook CSV matching (Section 7)
+      sectionId: string,         // Canvas internal section ID; purpose unconfirmed, kept just in case
+      sectionSisId: string       // e.g. "CSC101-F-LEC0101-20269"
+    },
+    submittedAt: string,        // raw Canvas timestamp, e.g. "2026-05-31 04:00:00 UTC"
+    attempt: number             // the attempt number kept after dedup (see below) — always the minimum
+                                 // attempt value seen for that student, i.e. their first attempt
   },
-  bloomLevel: string,         // one of Canvas's Bloom taxonomy options
-  keywords: string[],         // 2-4 tags, split from comma-separated input
-  stem: string,                // question text, ≤50 words
-  responses: { A: string, B: string, C: string, D: string },   // ≤10 words each
-  feedback:  { A: string, B: string, C: string, D: string },   // ≤50 words each
-  correctAnswer: "A" | "B" | "C" | "D",
-  grade: {
-    points: number | null,
-    pointsPossible: number,
-    comment: string
+
+  question: {
+    bloomLevel: string | null,  // one of Canvas's Bloom taxonomy options; null if unrecognized text (flagged, not guessed)
+    keywords: string[],         // 2-4 tags, split from comma-separated input
+    stem: string,                // question text, ≤50 words
+    responses: { A: string, B: string, C: string, D: string },   // ≤10 words each
+    feedback:  { A: string, B: string, C: string, D: string },   // ≤50 words each
+    correctAnswer: "A" | "B" | "C" | "D" | null  // null if unrecognized text (flagged, not guessed)
   },
-  status: "pending" | "accepted" | "rejected",
-  wasEdited: boolean          // true if TA modified any field from the original submission
+
+  review: {
+    grade: {
+      points: number | null,
+      pointsPossible: number | null,  // not present in the CSV; null until the review UI sets it (Section 10 step 3)
+      comment: string
+    },
+    status: "pending" | "accepted" | "rejected",
+    wasEdited: boolean          // true if TA modified any field from the original submission
+  }
 }
 ```
+
+### CSV → data model mapping
+
+Implemented in [`src/csv/parseSurveyCsv.js`](src/csv/parseSurveyCsv.js). Key
+points, based on an actual header export plus behavior observed on a
+different quiz in the same Canvas instance (see Section 11 for what's still
+unconfirmed):
+
+- **Columns are mapped by position, not by matching header text.** The
+  question IDs embedded in Canvas's header text (e.g. `5774576: What level
+  of bloom taxonomy...`) have gaps and are not sequential, and
+  quoting/whitespace around them is inconsistent between questions (see
+  [`src/csv/columnLayout.js`](src/csv/columnLayout.js) for the exact layout).
+- First 8 columns are always `name, id, sis_id, section, section_id,
+  section_sis_id, submitted, attempt`. Then 12 question blocks, each
+  `[answerText, boilerplateScoreColumn]` — the boilerplate column is always
+  `1.0` and is ignored. Then 3 trailing columns: `n correct, n incorrect,
+  score` (also ignored; these describe the survey's own auto-grading, not
+  the question being reviewed).
+- **Structurally unparseable rows** (wrong column count) are excluded
+  entirely and reported in the upload summary — this is the only case that
+  should ever silently drop a row's worth of data, since there's nothing
+  sensible to map it to.
+- **Incomplete rows**: all 12 question-answer fields must be non-empty for a
+  row to become a question. Rows failing this are excluded from `questions`
+  but reported by row number and student in the parse summary — never
+  silently dropped or guessed at, since it's unknown what an incomplete
+  Canvas survey submission actually means (see Section 11).
+- **Duplicate attempts**: rows are grouped by `sisLoginId`; if a student has
+  more than one complete, structurally-valid row, only the one with the
+  minimum `attempt` value is kept. Every drop is logged in the parse summary
+  (`type: "duplicateAttemptDropped"`), never silent.
+- `bloomLevel` and `correctAnswer` normalization are each isolated in a
+  single small function
+  ([`normalizeBloomLevel`](src/csv/fieldNormalization.js),
+  [`normalizeCorrectAnswer`](src/csv/fieldNormalization.js)) specifically so
+  they're a quick fix if a real export's option text turns out to differ
+  from what's assumed (see Section 11 — the correct-answer mapping in
+  particular is unconfirmed for this survey).
 
 ### Word-count validation
 
@@ -204,7 +266,11 @@ Approach:
 1. ~~Pyodide + text2qti de-risking spike (see Section 6) — confirm the
    riskiest dependency works before investing in the rest~~ **Done** — see
    Section 6 and [`spikes/text2qti-spike/`](spikes/text2qti-spike/).
-2. CSV parser + data model, tested against a hand-written sample CSV
+2. ~~CSV parser + data model, tested against a hand-written sample CSV~~
+   **Done** — see Section 4 and [`src/csv/`](src/csv/). No real submission
+   exists yet, so tested against a fabricated fixture
+   ([`tools/generate_fixture_csv.py`](tools/generate_fixture_csv.py)) rather
+   than a hand-written one.
 3. Review queue + detail UI (no persistence yet)
 4. Autosave (localStorage/IndexedDB)
 5. Full QTI export (wire the reviewed/accepted data into the text2qti
@@ -227,9 +293,25 @@ Approach:
 
 ## 11. Open items still to resolve once real files are available
 
-- Exact column headers/order of the real Canvas survey CSV export (parser
-  mapping may need adjusting once a real sample is seen — build the parser
-  to be reasonably flexible/self-mapping in the meantime)
+- **Resolved (with caveats):** column layout of the real Canvas survey CSV
+  export is now known from an actual header export (see Section 4's "CSV →
+  data model mapping"). Two things remain unconfirmed because no real
+  submission to this survey exists yet:
+  - The correct-answer question's option text (assumed to be the literal
+    letters `A`/`B`/`C`/`D`) is based on a different quiz in the same Canvas
+    instance, not this survey.
+  - What an incomplete/partial Canvas submission looks like in the export is
+    unknown — the parser currently treats any row missing one or more of the
+    12 answer fields as incomplete and excludes it from review, but this is
+    untested against a real partial submission.
+  - **TODO:** once a real submission to this survey exists, re-run the
+    actual Canvas export through `parseSurveyCsv` and manually spot-check
+    the result (especially `bloomLevel`/`correctAnswer` normalization and
+    the incomplete-row handling above) before trusting it for actual
+    grading. Until then, `tools/generate_fixture_csv.py` produces a
+    fabricated stand-in export for parser development/testing — see
+    `fixtures/fabricated-survey-export.csv` and its test coverage in
+    `src/csv/__tests__/`.
 - Exact column layout of a real Canvas gradebook export CSV, to finalize the
   merge logic in Section 7
 - Whether per-question point values (vs. a fixed value) are needed — revisit
@@ -244,3 +326,15 @@ Approach:
   cases (multi-question quizzes, per-question points, special characters,
   confirming LaTeX/subprocess code paths stay dormant) as test cases for
   Section 10 step 5.
+- 2026-07-16 — Built the Step 2 CSV parser (`src/csv/`) against real column
+  layout knowledge from an actual Canvas header export (Section 4). No real
+  submission exists yet, so `tools/generate_fixture_csv.py` generates a
+  clearly-labeled fabricated stand-in CSV (byte-matched header, deliberately
+  messy rows: malformed keywords, an incomplete row, a duplicate attempt,
+  an over-word-limit stem) that the parser is tested against (20 passing
+  vitest cases). Data model (Section 4) restructured into `submission` /
+  `question` / `review` groups and extended with `section`, `sectionId`,
+  `sectionSisId`, `submittedAt`, and `attempt`. Every function (exported or
+  not) documented with JSDoc. Added a TODO (Section 11) to re-run the parser
+  against the first real export and spot-check it before trusting it for
+  grading.
