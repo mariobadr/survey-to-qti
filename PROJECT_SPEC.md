@@ -151,6 +151,13 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 1. **Upload** — file picker for the CSV. Parse and show: total rows parsed,
    any rows with missing required fields, any word-count violations. Do not
    block on warnings; block only on structurally unparseable rows.
+   Implementation note: "block" means disabling the "Continue to review
+   queue" action, not rejecting the file outright — the parse summary is
+   always shown either way. Blocks when there are any structurally invalid
+   rows (the file's shape doesn't match a Canvas export at all, so nothing
+   can be safely mapped) or when zero valid questions resulted (nothing to
+   review). Incomplete rows, word-count violations, and the other warning
+   types never block.
 2. **Queue / list view** — table of all submissions: student, Bloom level,
    status, grade. Filterable by status and Bloom level. Click a row to open
    the detail view.
@@ -280,6 +287,11 @@ Approach:
    ([`tools/generate_fixture_csv.py`](tools/generate_fixture_csv.py)) rather
    than a hand-written one.
 3. Review queue + detail UI (no persistence yet)
+   - Upload screen (Screen 1) **done** — see
+     [`src/components/Upload.svelte`](src/components/Upload.svelte). Wired
+     to `parseSurveyCsv`; shows the parse summary and blocks continuing only
+     on structurally invalid rows or zero valid questions, per Section 5.
+   - Queue/list view and detail/review view (Screens 2-3) not built yet.
 4. Autosave (localStorage/IndexedDB)
 5. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
@@ -357,3 +369,15 @@ Approach:
   (confirmed — blocked by CORS). Decided to require hosted static files
   (e.g. GitHub Pages) instead of double-click-to-open; Section 2 updated to
   match.
+- 2026-07-16 — Built the Upload screen (Section 5, Screen 1) —
+  `src/components/Upload.svelte`, wired to `parseSurveyCsv`. Verified
+  end-to-end in a real browser (not just unit tests): uploaded the
+  fabricated fixture and confirmed every summary number and warning message
+  against known values, and confirmed a structurally invalid file disables
+  "Continue to review queue" while a valid-but-warning-laden file doesn't.
+  Clarified in Section 5 what "block" means in practice (disables
+  Continue, doesn't reject the file) and exactly which conditions trigger
+  it. Added a `biome.json` override disabling `noUnusedImports` /
+  `noUnusedVariables` for `*.svelte` files — Biome 2.5's Svelte support
+  doesn't yet track script variables that are only referenced from the
+  template, so it was flagging genuinely-used state/props as dead code.
