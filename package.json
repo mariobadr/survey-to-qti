@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
-    "dev-test": "vitest"
+    "dev-test": "vitest",
+    "lint": "biome check .",
+    "lint-fix": "biome check --write ."
   },
   "repository": {
     "type": "git",
@@ -23,6 +25,7 @@
     "papaparse": "^5.5.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
     "vitest": "^4.1.10"
   }
 }

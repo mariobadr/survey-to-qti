@@ -20,6 +20,15 @@ Use `npm run dev-test` instead to run vitest in watch mode while iterating.
 
 The CSV parser tests run against the fixture at `fixtures/fabricated-survey-export.csv` — see below for how that file is produced.
 
+## Linting
+
+```
+npm run lint
+```
+
+Checks formatting, import sorting, and lint rules with [Biome](https://biomejs.dev/).
+Use `npm run lint-fix` to apply safe fixes automatically.
+
 ## Generating the fabricated CSV fixture
 
 No real Canvas survey submission exists yet, so the parser is developed and tested against a fabricated stand-in export instead.

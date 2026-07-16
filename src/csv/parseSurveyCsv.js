@@ -6,11 +6,11 @@ import {
   questionAnswerColumnIndex,
 } from "./columnLayout.js";
 import {
-  WORD_LIMITS,
   isKeywordCountExpected,
   normalizeBloomLevel,
   normalizeCorrectAnswer,
   parseKeywords,
+  WORD_LIMITS,
   wordCount,
 } from "./fieldNormalization.js";
 
@@ -252,7 +252,9 @@ export function parseSurveyCsv(csvText) {
     const existingAttempt = Number.parseInt(existing.metadata.attempt, 10);
     const candidateAttempt = Number.parseInt(candidate.metadata.attempt, 10);
     const [kept, dropped] =
-      candidateAttempt < existingAttempt ? [candidate, existing] : [existing, candidate];
+      candidateAttempt < existingAttempt
+        ? [candidate, existing]
+        : [existing, candidate];
     byStudent.set(key, kept);
     warnings.push({
       type: "duplicateAttemptDropped",

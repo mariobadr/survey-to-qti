@@ -12,8 +12,11 @@ const FIXTURE_PATH = fileURLToPath(
 const fixtureCsv = readFileSync(FIXTURE_PATH, "utf-8");
 
 function findQuestion(questions, sisLoginId) {
-  const question = questions.find((q) => q.submission.student.sisLoginId === sisLoginId);
-  if (!question) throw new Error(`no question found for sisLoginId ${sisLoginId}`);
+  const question = questions.find(
+    (q) => q.submission.student.sisLoginId === sisLoginId,
+  );
+  if (!question)
+    throw new Error(`no question found for sisLoginId ${sisLoginId}`);
   return question;
 }
 
@@ -35,9 +38,11 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
       name: "Erin Evans",
       missingFields: ["feedbackD"],
     });
-    expect(result.questions.some((q) => q.submission.student.sisLoginId === "fab00005")).toBe(
-      false,
-    );
+    expect(
+      result.questions.some(
+        (q) => q.submission.student.sisLoginId === "fab00005",
+      ),
+    ).toBe(false);
   });
 
   it("collapses David Davis's duplicate attempts to the minimum attempt and logs the drop", () => {
@@ -50,7 +55,9 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
       "What is the average-case time complexity of quicksort?",
     );
 
-    const dropped = result.summary.warnings.find((w) => w.type === "duplicateAttemptDropped");
+    const dropped = result.summary.warnings.find(
+      (w) => w.type === "duplicateAttemptDropped",
+    );
     expect(dropped).toMatchObject({
       sisLoginId: "fab00004",
       keptAttempt: 1,
@@ -74,7 +81,9 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
 
     const warning = result.summary.warnings.find(
       (w) =>
-        w.type === "wordCountExceeded" && w.sisLoginId === "fab00006" && w.field === "stem",
+        w.type === "wordCountExceeded" &&
+        w.sisLoginId === "fab00006" &&
+        w.field === "stem",
     );
     expect(warning).toBeDefined();
     expect(warning.actual).toBeGreaterThan(warning.limit);
@@ -120,7 +129,10 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
 
 describe("parseSurveyCsv structural validation", () => {
   it("flags a row with the wrong column count as structurally invalid, and excludes it entirely", () => {
-    const header = Array.from({ length: EXPECTED_COLUMN_COUNT }, (_, i) => `col${i}`).join(",");
+    const header = Array.from(
+      { length: EXPECTED_COLUMN_COUNT },
+      (_, i) => `col${i}`,
+    ).join(",");
     const truncatedRow = METADATA_FIELDS.map((f) => `bad-${f}`).join(","); // way too few columns
     const csv = `${header}\n${truncatedRow}\n`;
 
