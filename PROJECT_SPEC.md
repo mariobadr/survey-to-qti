@@ -410,3 +410,10 @@ Approach:
   fabricated fixture, confirmed filtering by Bloom level and by status
   (including the empty-results case) produces the right row counts, and
   confirmed the select/back round-trip.
+- 2026-07-16 — Added component tests for the Queue/list view
+  (`src/components/__tests__/Queue.test.js`), same stack as the Upload
+  tests. Uses hand-built minimal Question objects (not the fixture, which
+  is always ungraded fresh off the parser) so both `formatGrade` branches
+  — "points / pointsPossible" and points-only — get real coverage. Covers
+  unfiltered rendering, filtering by Bloom level, by status, the
+  no-matches empty state, and `onSelect` firing with the right id.
