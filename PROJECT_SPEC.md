@@ -86,12 +86,26 @@ question is editable during review, review state is written continuously).
     correctAnswer: "A" | "B" | "C" | "D" | null  // null if unrecognized text (flagged, not guessed)
   },
 
+  // Permanent snapshot of `question`'s content fields as first parsed from
+  // the CSV — same shape as `question` above, never mutated after parse.
+  // Lets the review UI show the TA what was actually submitted alongside
+  // whatever they've since edited, and lets `wasEdited` (below) be computed
+  // as a live diff against it rather than tracked as a separate flag.
+  original: {
+    bloomLevel: string | null,
+    keywords: string[],
+    stem: string,
+    responses: { A: string, B: string, C: string, D: string },
+    feedback:  { A: string, B: string, C: string, D: string },
+    correctAnswer: "A" | "B" | "C" | "D" | null
+  },
+
   review: {
     grade: {
       points: number | null       // the score earned; pointsPossible is NOT here, see below
     },
     status: "pending" | "accepted" | "rejected",
-    wasEdited: boolean          // true if TA modified any field from the original submission
+    wasEdited: boolean          // computed live as `question` differing from `original` in any content field
   }
 }
 ```
@@ -104,11 +118,6 @@ outside any one question's draft/commit cycle. TODO: when `pointsPossible`
 changes after some `points` have already been entered, consider scaling those
 `points` proportionally so grades don't silently become inconsistent with the
 new denominator — not implemented.
-
-PLANNED CHANGE (see "Planned rework" below): a permanent `original` snapshot of the
-content fields (`stem`/`responses`/`feedback`/`correctAnswer`/`bloomLevel`/`keywords`) as
-first parsed, kept alongside `question` and never mutated — today there's no persisted
-original to compare against, only `wasEdited`'s boolean flag.
 
 ### CSV → data model mapping
 
@@ -148,6 +157,10 @@ unconfirmed):
   they're a quick fix if a real export's option text turns out to differ
   from what's assumed (see Section 11 — the correct-answer mapping in
   particular is unconfirmed for this survey).
+- `original` (Section 4) is built alongside `question` from the same parsed
+  values, but as independent objects/arrays (not shared references), so
+  later edits to `question` can never mutate `original` through a shared
+  object.
 
 ### Word-count validation
 
@@ -176,6 +189,11 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 3. **Detail / review view** — one question at a time:
    - Editable stem, four responses, four feedback fields
    - Correct-answer selector
+   - Every editable content field (stem, each response, each feedback, the
+     correct-answer selector, Bloom level, keywords) shows the corresponding
+     `original` value (Section 4) read-only right next to it, so the TA can
+     see exactly what the student submitted while editing — not just
+     whether it's been changed (see "Planned rework" item 2)
    - Also editable, despite not being in the original bullet list: Bloom
      level (dropdown) and keywords (comma-separated text) — no reason they
      should be locked when everything else is editable
@@ -200,9 +218,11 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
      work, and Save is really just a manual checkpoint)
    - `wasEdited` (Section 4) is computed from content fields only (stem,
      responses, feedback, correct answer, Bloom level, keywords) — grading
-     and accept/reject never set it. It's monotonic: once a question has
-     been edited from its original submission, later saving it back
-     unchanged doesn't un-flag it
+     and accept/reject never set it. It's a **live diff against
+     `original`** (see "Planned rework" item 2): if the TA edits a field and
+     then types the original value back before saving, `wasEdited` clears —
+     it no longer tracks "was this ever edited" as a permanent flag, since
+     the original value is always visible for comparison anyway
    - Returning to the queue restores whatever status/Bloom-level filters
      were active, rather than resetting to "All"
 4. **Export** — summary counts (accepted / rejected / pending), two actions:
@@ -213,7 +233,7 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 
 Trying Screens 1-3 end to end (all built per Section 10 step 3) surfaced changes to make
 before continuing further. Screen 1 (Upload) is fine as-is; nothing below touches it. Items
-3, 4, and 5 are done; items 1 and 2 are settled decisions not yet implemented; item 6 (all
+2, 3, 4, and 5 are done; item 1 is a settled decision not yet implemented; item 6 (all
 attempts, not just one) is a bigger, not-fully-designed change — see its own note on scope.
 
 1. **Merge Queue and Detail into one screen, called the Question Review view — no more
@@ -226,17 +246,17 @@ attempts, not just one) is a bigger, not-fully-designed change — see its own n
    for it (the "Next / Previous navigate a *frozen* snapshot..." bullet above, and the
    `workingSetIds`/`{#key}`-remount machinery in `App.svelte`) — there's no longer a
    separate page to navigate between.
-2. **Show the original CSV value next to the editable field, not just an edited/not-edited
-   flag.** Right now `wasEdited` (Section 4) is a single boolean with no way to see *what*
-   changed. The detail view should show, per content field, both the original submitted
-   value (as a read-only label) and the current editable value (the text field already
-   shown).
-   Impact: requires the data model to retain a **permanent, unmutated copy of the original
-   parsed submission** (see the `original` note added to Section 4) — today the only
-   "original" reference is `Detail.svelte`'s local `opened` snapshot, which is ephemeral
-   and reset on every (re)mount, never meant to survive across sessions. A persisted
-   `original` would also let `wasEdited` become a simple live diff against it, replacing
-   the monotonic OR-based computation built specifically to work around not having one.
+2. ~~**Show the original CSV value next to the editable field, not just an edited/not-edited
+   flag.**~~ **Done** — added a permanent, never-mutated `original` snapshot to the data
+   model (Section 4), populated in
+   [`src/csv/parseSurveyCsv.js`](src/csv/parseSurveyCsv.js) alongside `question` (as
+   independent objects/arrays, so later edits to `question` can't reach it). Every editable
+   content field in [`src/components/Detail.svelte`](src/components/Detail.svelte) now shows
+   its `original` value read-only right below it. As anticipated, this also let `wasEdited`
+   become a simple live diff against `original` (`contentDiffersFrom(question.original)` in
+   `commit()`), replacing the monotonic OR-based computation built specifically to work
+   around not having a persisted original — `Detail.svelte`'s local `opened` snapshot still
+   exists, but now only initializes the draft state, not `wasEdited`.
 3. ~~**Remove the comment field from the grade panel.**~~ **Done** — there's no mechanism
    to get a comment into Canvas's gradebook CSV import (Section 7's column list is
    Student/ID/SIS User ID/SIS Login ID/Section plus one score column per assignment — no
@@ -427,12 +447,13 @@ Approach:
      working-set navigation, draft-until-commit editing, content-only
      monotonic `wasEdited`).
 4. Rework Queue/Detail into the Question Review view per "Planned rework"
-   (Section 5) — items 3, 4, and 5 (dropped `grade.comment`, non-per-question
-   `pointsPossible`, no Bloom-level filter) are done; items 1 (merged
-   Queue+Detail view) and 2 (persisted `original` snapshot) not started.
-   Doing this before step 5 (Autosave) rather than after, since building
-   autosave against a UI/data model that's still changing would mean redoing
-   autosave work too. Includes reopening parts of step 2 (the CSV parser)
+   (Section 5) — items 2, 3, 4, and 5 (persisted `original` snapshot,
+   dropped `grade.comment`, non-per-question `pointsPossible`, no
+   Bloom-level filter) are done; item 1 (merged Queue+Detail view) not
+   started. Doing this before step 5 (Autosave) rather than after, since
+   building autosave against a UI/data model that's still changing would
+   mean redoing autosave work too. Includes reopening parts of step 2 (the
+   CSV parser)
    that assumed one attempt survives per student — see "Planned rework" item
    6, the biggest and least-designed piece of this step.
 5. Autosave (localStorage/IndexedDB)
@@ -649,3 +670,24 @@ Approach:
   `pointsPossible` prop rather than a per-question `grade` object; split
   the "formatted grades" test into an unset-pointsPossible case and a
   shared-pointsPossible case).
+- 2026-07-16 — Implemented "Planned rework" item 2 (show the original CSV
+  value next to each editable field). Added a permanent `original` field to
+  the data model (Section 4) — same shape as `question`'s content fields,
+  built in `src/csv/parseSurveyCsv.js` alongside `question` from
+  independently-copied objects/arrays (never shared references, so later
+  edits can't reach it) and never mutated after parse. `Detail.svelte` now
+  shows `question.original`'s value read-only next to stem, each
+  response/feedback, the correct-answer selector, Bloom level, and
+  keywords. As the spec anticipated when this item was first scoped,
+  having a persisted original let `wasEdited` become a live diff
+  (`contentDiffersFrom(question.original)`, computed fresh in `commit()`)
+  instead of the monotonic OR-based flag it replaced — reverting an edited
+  field back to its original value before saving now clears `wasEdited`,
+  where before it would have stayed permanently flagged. The local `opened`
+  snapshot in `Detail.svelte` still exists but now only seeds the draft
+  state on mount. Updated `parseSurveyCsv.test.js` (asserts `original`
+  matches the parsed content and isn't reference-shared with `question`)
+  and `Detail.test.js` (test helpers now build both `question` and
+  `original`, defaulting to the same content; added tests for the
+  original-value display and for the live-diff `wasEdited` behavior;
+  replaced the old monotonic-`wasEdited` test).

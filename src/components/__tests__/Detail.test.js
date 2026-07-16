@@ -10,35 +10,41 @@ import Detail from "../Detail.svelte";
 // so cleanup is registered explicitly instead.
 afterEach(() => cleanup());
 
-// `questionOverrides`/`reviewOverrides` are shallow-merged onto the
-// defaults below, one level deep -- e.g. { question: { correctAnswer: null } }
+// The content fields shared by `question` and `original` by default -- most
+// tests don't care about the original-vs-current distinction, so both
+// default to the same values (a freshly-parsed, never-edited question).
+const BASE_CONTENT = {
+  stem: "What is the base case of a recursive function?",
+  responses: {
+    A: "A case that calls itself",
+    B: "A case that stops the recursion",
+    C: "A case that only runs once",
+    D: "A syntax error",
+  },
+  feedback: {
+    A: "Not quite -- that's the recursive case.",
+    B: "Correct.",
+    C: "Not necessarily true for all recursive functions.",
+    D: "No, this is a valid concept, not an error.",
+  },
+  correctAnswer: "B",
+  bloomLevel: "Remember",
+  keywords: ["recursion", "base case"],
+};
+
+// `questionOverrides`/`originalOverrides`/`reviewOverrides` are shallow-merged
+// onto the defaults, one level deep -- e.g. { question: { correctAnswer: null } }
 // keeps the default stem/responses/etc. and only overrides correctAnswer.
 function makeQuestion({
   question: questionOverrides,
+  original: originalOverrides,
   review: reviewOverrides,
 } = {}) {
   return {
     id: "s1",
     submission: { student: { name: "Alice Anderson" } },
-    question: {
-      stem: "What is the base case of a recursive function?",
-      responses: {
-        A: "A case that calls itself",
-        B: "A case that stops the recursion",
-        C: "A case that only runs once",
-        D: "A syntax error",
-      },
-      feedback: {
-        A: "Not quite -- that's the recursive case.",
-        B: "Correct.",
-        C: "Not necessarily true for all recursive functions.",
-        D: "No, this is a valid concept, not an error.",
-      },
-      correctAnswer: "B",
-      bloomLevel: "Remember",
-      keywords: ["recursion", "base case"],
-      ...questionOverrides,
-    },
+    question: { ...BASE_CONTENT, ...questionOverrides },
+    original: { ...BASE_CONTENT, ...originalOverrides },
     review: {
       grade: { points: null },
       status: "pending",
@@ -50,6 +56,7 @@ function makeQuestion({
 
 function renderDetail({
   question,
+  original,
   review,
   pointsPossible = null,
   hasPrevious = false,
@@ -63,7 +70,7 @@ function renderDetail({
   };
   render(Detail, {
     props: {
-      question: makeQuestion({ question, review }),
+      question: makeQuestion({ question, original, review }),
       pointsPossible,
       hasPrevious,
       hasNext,
@@ -92,6 +99,46 @@ describe("Detail", () => {
     );
     expect(screen.getByRole("radio", { name: "B is correct" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Pending" })).toBeChecked();
+  });
+
+  it("shows the original submitted value read-only next to each editable field", () => {
+    renderDetail({
+      question: {
+        stem: "Edited stem.",
+        responses: {
+          A: "Edited A",
+          B: "Edited B",
+          C: "Edited C",
+          D: "Edited D",
+        },
+        feedback: {
+          A: "Edited FA",
+          B: "Edited FB",
+          C: "Edited FC",
+          D: "Edited FD",
+        },
+        correctAnswer: "A",
+        bloomLevel: "Analyze",
+        keywords: ["edited", "keyword"],
+      },
+      // `original` left at BASE_CONTENT's defaults, simulating a question
+      // edited in a previous session.
+    });
+
+    expect(
+      screen.getByText(
+        "Original: What is the base case of a recursive function?",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Original: A case that stops the recursion"),
+    ).toBeInTheDocument(); // response B
+    expect(screen.getByText("Original: Correct.")).toBeInTheDocument(); // feedback B
+    expect(screen.getByText("Original correct answer: B")).toBeInTheDocument();
+    expect(screen.getByText("Original: Remember")).toBeInTheDocument(); // bloom level
+    expect(
+      screen.getByText("Original: recursion, base case"),
+    ).toBeInTheDocument(); // keywords
   });
 
   it("shows no 'unsaved changes' indicator until something is edited", async () => {
@@ -183,21 +230,38 @@ describe("Detail", () => {
     );
   });
 
-  it("keeps wasEdited true (monotonic) even if content is saved back unchanged, once already flagged", async () => {
+  it("computes wasEdited as a live diff against `original`, ignoring a stale review.wasEdited flag", async () => {
     const { onSave } = renderDetail({
       review: {
         grade: { points: null },
         status: "pending",
-        wasEdited: true,
+        wasEdited: true, // stale -- e.g. left over from an edit since reverted
       },
     });
 
-    // No content edits this session -- just grading.
+    // Content matches `original` (both default to BASE_CONTENT) -- no edits
+    // this session either, so the live diff says false regardless of the
+    // stale flag above.
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
-      expect.objectContaining({ wasEdited: true }),
+      expect.objectContaining({ wasEdited: false }),
+    );
+  });
+
+  it("clears wasEdited if edited content is reverted back to the original value before saving", async () => {
+    const { onSave } = renderDetail();
+
+    const stem = screen.getByLabelText(/stem/i);
+    await userEvent.type(stem, " Extra text.");
+    await userEvent.type(stem, "{backspace}".repeat(" Extra text.".length));
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({ wasEdited: false }),
     );
   });
 

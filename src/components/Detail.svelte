@@ -13,9 +13,10 @@ const RESPONSE_LETTERS = ["A", "B", "C", "D"];
 /**
  * @typedef {object} Props
  * @property {object} question - The live Question object to review (Section
- *   4's data model). A fresh Detail instance is created per navigated
- *   question (App.svelte wraps this component in a `{#key}` block), so the
- *   draft state below only ever initializes once per question.
+ *   4's data model), including its permanent `original` snapshot. A fresh
+ *   Detail instance is created per navigated question (App.svelte wraps
+ *   this component in a `{#key}` block), so the draft state below only
+ *   ever initializes once per question.
  * @property {number | null} pointsPossible - The single points-possible
  *   value shared across every question (Planned rework item 4). Set from
  *   the top-level input in App.svelte; shown here read-only since it's no
@@ -64,9 +65,10 @@ function snapshotQuestion(q) {
   };
 }
 
-// Content fields as they stood when this Detail instance opened. Used both
-// to initialize the draft below and, in commit(), to detect edits made
-// *during this session* via contentDiffersFrom(opened).
+// Content/grade/status fields as they stood when this Detail instance
+// opened -- used only to initialize the draft state below. (For the
+// permanent original-submission snapshot shown read-only next to each
+// field, and used to compute wasEdited, see `question.original` instead.)
 const opened = untrack(() => snapshotQuestion(question));
 
 // Draft state.
@@ -88,9 +90,6 @@ let canAccept = $derived(correctAnswer !== null);
 // isDirty compares against the *live* question.question (which reflects
 // the last save, if any -- Detail stays mounted across a plain Save click,
 // only remounting on Next/Previous), so it correctly clears after saving.
-// wasEdited, below, deliberately compares against `opened` instead, since
-// it needs to know whether anything changed *this session*, regardless of
-// whether that change has already been saved.
 let isDirty = $derived(
   status !== question.review.status ||
     points !== question.review.grade.points ||
@@ -127,12 +126,13 @@ function contentDiffersFrom(reference) {
 /**
  * Commit the current draft back to the shared question via onSave.
  *
- * wasEdited is content-only (Section 4) and monotonic: once a question has
- * ever been edited from its original submission, it stays flagged, even if
- * the TA later types the original text back -- so this ORs the existing
- * flag with whether content changed relative to `opened` (this session's
- * starting point), rather than recomputing from scratch against the
- * original every time.
+ * wasEdited is content-only (Section 4) and is a live diff against
+ * `question.original` -- the permanent, never-mutated snapshot of what was
+ * first parsed from the CSV (Section 4). Unlike the monotonic
+ * flag this replaced, typing the original content back does clear it; the
+ * `original` values are always visible read-only next to each field (see
+ * markup below), so the TA can already tell a field was edited without
+ * needing a flag that survives reverting it.
  *
  * Also enforces the Accept-requires-a-correct-answer invariant: if the
  * draft somehow ended up "accepted" with no correct answer set (e.g. it was
@@ -152,7 +152,7 @@ function commit() {
     keywords,
     grade: { points },
     status: finalStatus,
-    wasEdited: question.review.wasEdited || contentDiffersFrom(opened),
+    wasEdited: contentDiffersFrom(question.original),
   });
 }
 
@@ -192,11 +192,13 @@ function handleBack() {
       {/each}
     </select>
   </label>
+  <p class="original">Original: {question.original.bloomLevel ?? "— not set —"}</p>
 
   <label>
     Keywords (comma-separated):
     <input type="text" bind:value={keywordsText} />
   </label>
+  <p class="original">Original: {question.original.keywords.join(", ")}</p>
   {#if !isKeywordCountExpected(keywords)}
     <p class="warning">{keywords.length} keyword(s), expected 2-4</p>
   {/if}
@@ -205,12 +207,16 @@ function handleBack() {
     Stem:
     <textarea bind:value={stem}></textarea>
   </label>
+  <p class="original">Original: {question.original.stem}</p>
   {#if wordCount(stem) > WORD_LIMITS.stem}
     <p class="warning">{wordCount(stem)} words, limit {WORD_LIMITS.stem}</p>
   {/if}
 
   <fieldset>
     <legend>Responses</legend>
+    <p class="original">
+      Original correct answer: {question.original.correctAnswer ?? "— none —"}
+    </p>
     {#each RESPONSE_LETTERS as letter (letter)}
       <div class="response">
         <label>
@@ -221,6 +227,7 @@ function handleBack() {
           Response {letter}:
           <textarea bind:value={responses[letter]}></textarea>
         </label>
+        <p class="original">Original: {question.original.responses[letter]}</p>
         {#if wordCount(responses[letter]) > WORD_LIMITS.response}
           <p class="warning">
             {wordCount(responses[letter])} words, limit {WORD_LIMITS.response}
@@ -230,6 +237,7 @@ function handleBack() {
           Feedback {letter}:
           <textarea bind:value={feedback[letter]}></textarea>
         </label>
+        <p class="original">Original: {question.original.feedback[letter]}</p>
         {#if wordCount(feedback[letter]) > WORD_LIMITS.feedback}
           <p class="warning">
             {wordCount(feedback[letter])} words, limit {WORD_LIMITS.feedback}
@@ -299,6 +307,11 @@ function handleBack() {
   }
   .warning {
     color: #8a6100;
+  }
+  .original {
+    color: #666;
+    font-size: 0.9em;
+    margin-block: 0.15em 0.5em;
   }
   .nav {
     display: flex;

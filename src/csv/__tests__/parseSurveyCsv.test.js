@@ -116,6 +116,11 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
         keywords: ["recursion", "base case"],
         correctAnswer: "B",
       },
+      original: {
+        bloomLevel: "Remember",
+        keywords: ["recursion", "base case"],
+        correctAnswer: "B",
+      },
       review: {
         status: "pending",
         wasEdited: false,
@@ -124,6 +129,14 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
     });
     expect(alice.question.responses.B).toBe("A case that stops the recursion");
     expect(alice.question.feedback.B).toBe("Correct.");
+    expect(alice.original.responses.B).toBe("A case that stops the recursion");
+    expect(alice.original.feedback.B).toBe("Correct.");
+    expect(alice.original.stem).toBe(alice.question.stem);
+    // `original` must be a deep copy, not the same object references as
+    // `question` -- mutating one must never be able to reach the other.
+    expect(alice.original.responses).not.toBe(alice.question.responses);
+    expect(alice.original.feedback).not.toBe(alice.question.feedback);
+    expect(alice.original.keywords).not.toBe(alice.question.keywords);
   });
 });
 

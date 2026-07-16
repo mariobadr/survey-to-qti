@@ -56,7 +56,7 @@ function missingAnswerFields(answers) {
  *
  * @param {Record<string, string>} metadata - Metadata, as returned by extractRow.
  * @param {Record<string, string>} answers - Answers, as returned by extractRow.
- * @returns {object} A Question object: `{ id, submission, question, review }`.
+ * @returns {object} A Question object: `{ id, submission, question, original, review }`.
  */
 function buildQuestion(metadata, answers) {
   const keywords = parseKeywords(answers.keywordsRaw);
@@ -72,6 +72,8 @@ function buildQuestion(metadata, answers) {
     C: answers.feedbackC,
     D: answers.feedbackD,
   };
+  const bloomLevel = normalizeBloomLevel(answers.bloomLevelRaw);
+  const correctAnswer = normalizeCorrectAnswer(answers.correctAnswerRaw);
 
   return {
     // One graded survey submission per student is expected, so the SIS
@@ -93,12 +95,26 @@ function buildQuestion(metadata, answers) {
       attempt: Number.parseInt(metadata.attempt, 10),
     },
     question: {
-      bloomLevel: normalizeBloomLevel(answers.bloomLevelRaw),
+      bloomLevel,
       keywords,
       stem: answers.stem,
       responses,
       feedback,
-      correctAnswer: normalizeCorrectAnswer(answers.correctAnswerRaw),
+      correctAnswer,
+    },
+    // Permanent, never-mutated snapshot of the content fields as first
+    // parsed -- lets the review UI show the TA what was actually submitted
+    // alongside whatever they've since edited (Section 5), and lets
+    // wasEdited be a live diff against it rather than tracked separately.
+    // Deep-copied (not just re-referenced) so later edits to `question`
+    // can never reach this object.
+    original: {
+      bloomLevel,
+      keywords: [...keywords],
+      stem: answers.stem,
+      responses: { ...responses },
+      feedback: { ...feedback },
+      correctAnswer,
     },
     review: {
       // grade is not present in the Canvas survey export; populated later
