@@ -16,6 +16,10 @@ const RESPONSE_LETTERS = ["A", "B", "C", "D"];
  *   4's data model). A fresh Detail instance is created per navigated
  *   question (App.svelte wraps this component in a `{#key}` block), so the
  *   draft state below only ever initializes once per question.
+ * @property {number | null} pointsPossible - The single points-possible
+ *   value shared across every question (Planned rework item 4). Set from
+ *   the top-level input in App.svelte; shown here read-only since it's no
+ *   longer a per-question field.
  * @property {boolean} hasPrevious
  * @property {boolean} hasNext
  * @property {(id: string, updates: object) => void} onSave - Commits the
@@ -26,8 +30,16 @@ const RESPONSE_LETTERS = ["A", "B", "C", "D"];
  */
 
 /** @type {Props} */
-let { question, hasPrevious, hasNext, onSave, onNext, onPrevious, onBack } =
-  $props();
+let {
+  question,
+  pointsPossible,
+  hasPrevious,
+  hasNext,
+  onSave,
+  onNext,
+  onPrevious,
+  onBack,
+} = $props();
 
 // A fresh Detail instance is created per navigated question (App.svelte
 // wraps this component in a {#key selectedQuestion.id} block), so it's safe
@@ -48,8 +60,6 @@ function snapshotQuestion(q) {
     bloomLevel: q.question.bloomLevel,
     keywords: q.question.keywords,
     points: q.review.grade.points,
-    pointsPossible: q.review.grade.pointsPossible,
-    comment: q.review.grade.comment,
     status: q.review.status,
   };
 }
@@ -67,8 +77,6 @@ let correctAnswer = $state(opened.correctAnswer);
 let bloomLevel = $state(opened.bloomLevel);
 let keywordsText = $state(opened.keywords.join(", "));
 let points = $state(opened.points);
-let pointsPossible = $state(opened.pointsPossible);
-let comment = $state(opened.comment);
 let status = $state(opened.status);
 
 let keywords = $derived(parseKeywords(keywordsText));
@@ -86,8 +94,6 @@ let canAccept = $derived(correctAnswer !== null);
 let isDirty = $derived(
   status !== question.review.status ||
     points !== question.review.grade.points ||
-    pointsPossible !== question.review.grade.pointsPossible ||
-    comment !== question.review.grade.comment ||
     contentDiffersFrom(question.question),
 );
 
@@ -144,7 +150,7 @@ function commit() {
     correctAnswer,
     bloomLevel,
     keywords,
-    grade: { points, pointsPossible, comment },
+    grade: { points },
     status: finalStatus,
     wasEdited: question.review.wasEdited || contentDiffersFrom(opened),
   });
@@ -239,14 +245,7 @@ function handleBack() {
       Points:
       <input type="number" bind:value={points} />
     </label>
-    <label>
-      Out of:
-      <input type="number" bind:value={pointsPossible} />
-    </label>
-    <label>
-      Comment:
-      <textarea bind:value={comment}></textarea>
-    </label>
+    <p>Out of: {pointsPossible ?? "not set"}</p>
   </fieldset>
 
   <fieldset>

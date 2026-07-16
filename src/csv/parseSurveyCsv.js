@@ -102,9 +102,10 @@ function buildQuestion(metadata, answers) {
     },
     review: {
       // grade is not present in the Canvas survey export; populated later
-      // by the review UI once a points-per-question setting exists
-      // (Section 6/10).
-      grade: { points: null, pointsPossible: null, comment: "" },
+      // by the review UI. pointsPossible is not part of a Question's grade
+      // at all -- it's a single value shared across every question (Section
+      // 4, Planned rework item 4), held in App.svelte instead.
+      grade: { points: null },
       status: "pending",
       wasEdited: false,
     },

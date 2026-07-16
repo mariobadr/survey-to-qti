@@ -5,6 +5,9 @@
  *   (Section 4's data model), unfiltered.
  * @property {string} [statusFilter] - Bindable; lets the caller restore the
  *   filter selection when returning from the detail view.
+ * @property {number | null} [pointsPossible] - The single points-possible
+ *   value shared across every question (Planned rework item 4), used to
+ *   format the Grade column.
  * @property {(id: string, workingSetIds: string[]) => void} onSelect -
  *   Called when the TA clicks a question to open the detail view (Screen 3),
  *   with that question's `id` and the ids of every question currently
@@ -13,7 +16,12 @@
  */
 
 /** @type {Props} */
-let { questions, statusFilter = $bindable("all"), onSelect } = $props();
+let {
+  questions,
+  statusFilter = $bindable("all"),
+  pointsPossible = null,
+  onSelect,
+} = $props();
 
 const STATUSES = ["pending", "accepted", "rejected"];
 
@@ -27,17 +35,18 @@ let filtered = $derived(
 );
 
 /**
- * Format a question's grade for display in the queue table.
+ * Format a question's points for display in the queue table, against the
+ * shared pointsPossible value (Planned rework item 4 -- pointsPossible is no
+ * longer per-question).
  *
- * @param {{ points: number | null, pointsPossible: number | null }} grade -
- *   `review.grade` from a Question object.
+ * @param {number | null} points - `review.grade.points` from a Question object.
  * @returns {string}
  */
-function formatGrade(grade) {
-  if (grade.points === null) return "Not graded";
-  return grade.pointsPossible !== null
-    ? `${grade.points} / ${grade.pointsPossible}`
-    : `${grade.points}`;
+function formatGrade(points) {
+  if (points === null) return "Not graded";
+  return pointsPossible !== null
+    ? `${points} / ${pointsPossible}`
+    : `${points}`;
 }
 </script>
 
@@ -84,7 +93,7 @@ function formatGrade(grade) {
             </td>
             <td>{q.question.bloomLevel ?? "Unrecognized"}</td>
             <td>{q.review.status}</td>
-            <td>{formatGrade(q.review.grade)}</td>
+            <td>{formatGrade(q.review.grade.points)}</td>
           </tr>
         {/each}
       </tbody>

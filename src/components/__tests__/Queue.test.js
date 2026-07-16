@@ -25,48 +25,56 @@ const SAMPLE_QUESTIONS = [
     name: "Alice Anderson",
     bloomLevel: "Remember",
     status: "pending",
-    grade: { points: null, pointsPossible: null },
+    grade: { points: null },
   }),
   makeQuestion({
     id: "s2",
     name: "Bob Brown",
     bloomLevel: "Analyze",
     status: "accepted",
-    grade: { points: 4, pointsPossible: 5 },
+    grade: { points: 4 },
   }),
   makeQuestion({
     id: "s3",
     name: "Carol Chen",
     bloomLevel: "Analyze",
     status: "rejected",
-    grade: { points: 2, pointsPossible: null },
+    grade: { points: 2 },
   }),
   makeQuestion({
     id: "s4",
     name: "David Davis",
     bloomLevel: null,
     status: "pending",
-    grade: { points: null, pointsPossible: null },
+    grade: { points: null },
   }),
 ];
 
-function renderQueue(questions = SAMPLE_QUESTIONS) {
+function renderQueue(questions = SAMPLE_QUESTIONS, pointsPossible = null) {
   const onSelect = vi.fn();
-  render(Queue, { props: { questions, onSelect } });
+  render(Queue, { props: { questions, pointsPossible, onSelect } });
   return onSelect;
 }
 
 describe("Queue", () => {
-  it("renders every question unfiltered, with formatted grades and an unrecognized Bloom level fallback", () => {
+  it("renders every question unfiltered, with points-only grades when pointsPossible isn't set", () => {
     renderQueue();
 
     expect(screen.getByText("4 of 4 question(s) shown.")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(5); // header + 4 data rows
 
     expect(screen.getAllByText("Not graded")).toHaveLength(2); // Alice and David share this
-    expect(screen.getByText("4 / 5")).toBeInTheDocument(); // Bob: points and pointsPossible
+    expect(screen.getByText("4")).toBeInTheDocument(); // Bob: points only, no shared pointsPossible
     expect(screen.getByText("2")).toBeInTheDocument(); // Carol: points only
     expect(screen.getByText("Unrecognized")).toBeInTheDocument(); // David's null bloomLevel
+  });
+
+  it("formats grades against the shared pointsPossible value when it's set", () => {
+    renderQueue(SAMPLE_QUESTIONS, 5);
+
+    expect(screen.getAllByText("Not graded")).toHaveLength(2);
+    expect(screen.getByText("4 / 5")).toBeInTheDocument(); // Bob
+    expect(screen.getByText("2 / 5")).toBeInTheDocument(); // Carol
   });
 
   it("filters by status", async () => {

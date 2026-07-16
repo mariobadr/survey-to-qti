@@ -40,7 +40,7 @@ function makeQuestion({
       ...questionOverrides,
     },
     review: {
-      grade: { points: null, pointsPossible: null, comment: "" },
+      grade: { points: null },
       status: "pending",
       wasEdited: false,
       ...reviewOverrides,
@@ -51,6 +51,7 @@ function makeQuestion({
 function renderDetail({
   question,
   review,
+  pointsPossible = null,
   hasPrevious = false,
   hasNext = false,
 } = {}) {
@@ -63,6 +64,7 @@ function renderDetail({
   render(Detail, {
     props: {
       question: makeQuestion({ question, review }),
+      pointsPossible,
       hasPrevious,
       hasNext,
       ...callbacks,
@@ -102,6 +104,19 @@ describe("Detail", () => {
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 
+  it("shows the shared pointsPossible value read-only, with no input to edit it", () => {
+    renderDetail({ pointsPossible: 5 });
+
+    expect(screen.getByText("Out of: 5")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/out of/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a fallback when pointsPossible hasn't been set yet", () => {
+    renderDetail({ pointsPossible: null });
+
+    expect(screen.getByText("Out of: not set")).toBeInTheDocument();
+  });
+
   it("disables Accept until a correct answer is set, and re-enables it once one is", async () => {
     const { onSave } = renderDetail({ question: { correctAnswer: null } });
 
@@ -125,7 +140,7 @@ describe("Detail", () => {
     const { onSave } = renderDetail({
       question: { correctAnswer: null },
       review: {
-        grade: { points: null, pointsPossible: null, comment: "" },
+        grade: { points: null },
         status: "accepted",
         wasEdited: false,
       },
@@ -151,10 +166,10 @@ describe("Detail", () => {
     );
   });
 
-  it("does not mark wasEdited when only grade/status/comment change, not content", async () => {
+  it("does not mark wasEdited when only grade/status change, not content", async () => {
     const { onSave } = renderDetail();
 
-    await userEvent.type(screen.getByLabelText(/comment/i), "Nice work!");
+    await userEvent.type(screen.getByLabelText(/^points/i), "4");
     await userEvent.click(screen.getByRole("radio", { name: "Reject" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -163,7 +178,7 @@ describe("Detail", () => {
       expect.objectContaining({
         wasEdited: false,
         status: "rejected",
-        grade: expect.objectContaining({ comment: "Nice work!" }),
+        grade: expect.objectContaining({ points: 4 }),
       }),
     );
   });
@@ -171,7 +186,7 @@ describe("Detail", () => {
   it("keeps wasEdited true (monotonic) even if content is saved back unchanged, once already flagged", async () => {
     const { onSave } = renderDetail({
       review: {
-        grade: { points: null, pointsPossible: null, comment: "" },
+        grade: { points: null },
         status: "pending",
         wasEdited: true,
       },
@@ -209,7 +224,7 @@ describe("Detail", () => {
       hasNext: true,
     });
 
-    await userEvent.type(screen.getByLabelText(/comment/i), "x");
+    await userEvent.type(screen.getByLabelText(/^points/i), "4");
 
     expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();

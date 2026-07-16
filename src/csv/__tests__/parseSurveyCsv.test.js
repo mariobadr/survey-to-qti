@@ -119,7 +119,7 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
       review: {
         status: "pending",
         wasEdited: false,
-        grade: { points: null, pointsPossible: null, comment: "" },
+        grade: { points: null },
       },
     });
     expect(alice.question.responses.B).toBe("A case that stops the recursion");

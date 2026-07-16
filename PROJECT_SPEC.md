@@ -88,18 +88,22 @@ question is editable during review, review state is written continuously).
 
   review: {
     grade: {
-      points: number | null,
-      pointsPossible: number | null,  // PLANNED CHANGE: becomes a single value shared by
-                                       // every question, not per-question — see "Planned
-                                       // rework" below
-      comment: string                 // PLANNED CHANGE: to be removed entirely — see
-                                       // "Planned rework" below
+      points: number | null       // the score earned; pointsPossible is NOT here, see below
     },
     status: "pending" | "accepted" | "rejected",
     wasEdited: boolean          // true if TA modified any field from the original submission
   }
 }
 ```
+
+`pointsPossible` is **not** part of a question's `grade` — it's a single value
+shared by every question, held once in `App.svelte` state (`pointsPossible`,
+committed from a top-level draft input via a "Set" button) and threaded down
+read-only to Queue (grade column) and the review view. Editing it lives
+outside any one question's draft/commit cycle. TODO: when `pointsPossible`
+changes after some `points` have already been entered, consider scaling those
+`points` proportionally so grades don't silently become inconsistent with the
+new denominator — not implemented.
 
 PLANNED CHANGE (see "Planned rework" below): a permanent `original` snapshot of the
 content fields (`stem`/`responses`/`feedback`/`correctAnswer`/`bloomLevel`/`keywords`) as
@@ -167,16 +171,19 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
    review). Incomplete rows, word-count violations, and the other warning
    types never block.
 2. **Queue / list view** — table of all submissions: student, Bloom level,
-   status, grade. Filterable by status and Bloom level. Click a row to open
-   the detail view.
+   status, grade. Filterable by status (the Bloom-level filter was removed,
+   see "Planned rework" item 5). Click a row to open the detail view.
 3. **Detail / review view** — one question at a time:
    - Editable stem, four responses, four feedback fields
    - Correct-answer selector
    - Also editable, despite not being in the original bullet list: Bloom
      level (dropdown) and keywords (comma-separated text) — no reason they
      should be locked when everything else is editable
-   - Grade input: both points *and* points-possible are per-question fields
-     (the CSV never supplies a ceiling — see Section 4), plus a comment
+   - Grade input: `points` is editable per-question; `pointsPossible` is a
+     single value shared by every question (see "Planned rework" item 4),
+     set from a top-level input in `App.svelte` and shown here read-only. No
+     comment field — there's no mechanism to get one into the gradebook CSV
+     (Section 7), so it was removed rather than built and left unused
    - Status: an explicit three-way Pending / Accept / Reject control
      (Section 4's data model has three states, not two) — Accept is
      disabled whenever the correct-answer selector is unset, since an
@@ -186,8 +193,8 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
      matched the Queue's filters at the moment the TA clicked in — editing
      a question mid-review so it no longer matches those filters doesn't
      remove it from Next/Previous for the rest of that session
-   - Editing model: every field (content and grade/status/comment) loads
-     into local draft state on open; nothing writes back to the shared
+   - Editing model: every field (content and grade/status) loads into local
+     draft state on open; nothing writes back to the shared
      question data until commit — either the explicit Save button, or
      silently on Next/Previous/Back-to-queue (so navigating never loses
      work, and Save is really just a manual checkpoint)
@@ -205,9 +212,9 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 ### Planned rework (from hands-on TA-perspective feedback, not yet implemented)
 
 Trying Screens 1-3 end to end (all built per Section 10 step 3) surfaced changes to make
-before continuing further. Screen 1 (Upload) is fine as-is; nothing below touches it. Item
-5 is done; items 1-4 are settled decisions not yet implemented; item 6 (all attempts, not
-just one) is a bigger, not-fully-designed change — see its own note on scope.
+before continuing further. Screen 1 (Upload) is fine as-is; nothing below touches it. Items
+3, 4, and 5 are done; items 1 and 2 are settled decisions not yet implemented; item 6 (all
+attempts, not just one) is a bigger, not-fully-designed change — see its own note on scope.
 
 1. **Merge Queue and Detail into one screen, called the Question Review view — no more
    separate "page."** Instead of clicking a row to navigate to a separate detail view
@@ -230,19 +237,27 @@ just one) is a bigger, not-fully-designed change — see its own note on scope.
    and reset on every (re)mount, never meant to survive across sessions. A persisted
    `original` would also let `wasEdited` become a simple live diff against it, replacing
    the monotonic OR-based computation built specifically to work around not having one.
-3. **Remove the comment field from the grade panel.** There's no mechanism to get a
-   comment into Canvas's gradebook CSV import (Section 7's column list is Student/ID/SIS
-   User ID/SIS Login ID/Section plus one score column per assignment — no comment column),
-   so a comment typed here would go nowhere. Remove `review.grade.comment` from the data
-   model and drop the comment textarea from the detail view.
-4. **`pointsPossible` becomes a single fixed value, not a per-question field, edited in one
-   place.** Reverses an earlier decision (see Changelog) — "per-question entry" was picked
-   when this was first asked about, but that was based on a misunderstanding; every
-   question should be graded out of the same denominator. Resolved: it's an editable field
-   near the top of the (merged) Question Review view — set once there, not per question —
-   and shown read-only within each individual question, so the TA always sees the
-   denominator without being able to change it from inside a specific question. `points`
-   (the score earned) stays editable per-question as before; only `pointsPossible` changes.
+3. ~~**Remove the comment field from the grade panel.**~~ **Done** — there's no mechanism
+   to get a comment into Canvas's gradebook CSV import (Section 7's column list is
+   Student/ID/SIS User ID/SIS Login ID/Section plus one score column per assignment — no
+   comment column), so a comment typed here would go nowhere. Removed `review.grade.comment`
+   from the data model, the parser's initial grade object
+   ([`src/csv/parseSurveyCsv.js`](src/csv/parseSurveyCsv.js)), and the comment textarea from
+   [`src/components/Detail.svelte`](src/components/Detail.svelte).
+4. ~~**`pointsPossible` becomes a single fixed value, not a per-question field, edited in one
+   place.**~~ **Done** — reverses an earlier decision (see Changelog): "per-question entry"
+   was picked when this was first asked about, but that was based on a misunderstanding;
+   every question should be graded out of the same denominator. `pointsPossible` moved out
+   of `review.grade` entirely (Section 4) into a single `pointsPossible` value held in
+   [`src/App.svelte`](src/App.svelte), set via its own draft input + "Set" button (not tied
+   to any one question's Save/commit cycle) and threaded down read-only to
+   [`src/components/Queue.svelte`](src/components/Queue.svelte) (the grade column) and
+   [`src/components/Detail.svelte`](src/components/Detail.svelte) (shown as "Out of: N",
+   no input). `points` (the score earned) stays editable per-question as before; only
+   `pointsPossible` changed. Left as a **TODO, not implemented**: when `pointsPossible`
+   changes after some `points` have already been entered against the old value, those
+   `points` are not rescaled — existing grades can silently become inconsistent with the
+   new denominator until the TA revisits them by hand.
    Note this is a different "points" concept from Section 11's "whether per-question point
    values are needed" item — that one is about Section 6's QTI-export points-per-question
    (the accepted question's weight in the real Canvas quiz), a separate setting from this
@@ -401,8 +416,9 @@ Approach:
      on structurally invalid rows or zero valid questions, per Section 5.
    - Queue/list view (Screen 2) — see
      [`src/components/Queue.svelte`](src/components/Queue.svelte). Table of
-     student/Bloom level/status/grade, filterable by status and Bloom
-     level; clicking a row opens the detail view with that filtered set as
+     student/Bloom level/status/grade, filterable by status (the
+     Bloom-level filter was later removed, "Planned rework" item 5);
+     clicking a row opens the detail view with that filtered set as
      the navigation working set (see Screen 3 below).
    - Detail/review view (Screen 3) — see
      [`src/components/Detail.svelte`](src/components/Detail.svelte). See
@@ -411,14 +427,14 @@ Approach:
      working-set navigation, draft-until-commit editing, content-only
      monotonic `wasEdited`).
 4. Rework Queue/Detail into the Question Review view per "Planned rework"
-   (Section 5) — not started. Doing this before step 5 (Autosave) rather
-   than after, since building autosave against a UI/data model that's about
-   to change (merged Queue+Detail, persisted `original` snapshot, dropped
-   `grade.comment`, non-per-question `pointsPossible`, no Bloom-level
-   filter) would mean redoing autosave work too. Includes reopening parts
-   of step 2 (the CSV parser) that assumed one attempt survives per
-   student — see "Planned rework" item 6, the biggest and least-designed
-   piece of this step.
+   (Section 5) — items 3, 4, and 5 (dropped `grade.comment`, non-per-question
+   `pointsPossible`, no Bloom-level filter) are done; items 1 (merged
+   Queue+Detail view) and 2 (persisted `original` snapshot) not started.
+   Doing this before step 5 (Autosave) rather than after, since building
+   autosave against a UI/data model that's still changing would mean redoing
+   autosave work too. Includes reopening parts of step 2 (the CSV parser)
+   that assumed one attempt survives per student — see "Planned rework" item
+   6, the biggest and least-designed piece of this step.
 5. Autosave (localStorage/IndexedDB)
 6. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
@@ -607,3 +623,29 @@ Approach:
   now reaches zero matches via status alone, rendering a two-question
   subset rather than combining two filters, since only one filter exists
   now) and the empty-state copy ("filters" → "filter").
+- 2026-07-16 — Implemented "Planned rework" item 3 (drop the grade
+  comment field). Removed `review.grade.comment` from the data model
+  (Section 4), the parser's initial grade object
+  (`src/csv/parseSurveyCsv.js`), and the comment textarea plus its
+  draft/`isDirty`/commit plumbing in `Detail.svelte`. `App.svelte` needed
+  no change, since it already assigns `review.grade` wholesale from the
+  save payload. Updated `parseSurveyCsv.test.js` and `Detail.test.js`
+  (two tests that used the comment field to create a dirty draft or
+  verify grade-only changes now use the points field instead).
+- 2026-07-16 — Implemented "Planned rework" item 4 (`pointsPossible` becomes
+  a single shared value, not per-question). Removed `pointsPossible` from
+  `review.grade` in the data model (Section 4) and the parser's initial
+  grade object (`src/csv/parseSurveyCsv.js`); added a `pointsPossible` value
+  in `App.svelte` with its own draft input + "Set" button (independent of
+  any question's Save/commit cycle), threaded down as a read-only prop to
+  `Queue.svelte` (used to format the grade column) and `Detail.svelte`
+  (shown as "Out of: N", no input — the editable "Out of" field and its
+  draft state/isDirty/commit plumbing were removed from `Detail.svelte`).
+  Added a TODO in `App.svelte`'s commit handler: rescaling already-entered
+  `points` when `pointsPossible` changes is not implemented. Updated
+  `parseSurveyCsv.test.js`, `Detail.test.js` (new pointsPossible-display
+  tests; `renderDetail` now takes/forwards a `pointsPossible` prop), and
+  `Queue.test.js` (`formatGrade` now takes `points` plus the shared
+  `pointsPossible` prop rather than a per-question `grade` object; split
+  the "formatted grades" test into an unset-pointsPossible case and a
+  shared-pointsPossible case).

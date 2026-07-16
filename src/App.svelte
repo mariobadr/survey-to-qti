@@ -6,6 +6,12 @@ import Upload from "./components/Upload.svelte";
 let questions = $state(null);
 let statusFilter = $state("all");
 
+// pointsPossible is a single value shared across every question (Planned
+// rework item 4), not a per-question field -- it's set here, via its own
+// draft/commit input, and threaded down read-only to Queue and Detail.
+let pointsPossibleDraft = $state(null);
+let pointsPossible = $state(null);
+
 // Frozen at selection time (Section 5): Next/Previous in the detail view
 // move through this snapshot of ids, not a live re-filtered list, so
 // editing a question mid-review can't shift what's navigable out from
@@ -35,6 +41,14 @@ function handleParsed(parsedQuestions) {
 function handleSelect(id, filteredIds) {
   workingSetIds = filteredIds;
   selectedQuestionId = id;
+}
+
+function handleCommitPointsPossible() {
+  // TODO: if points have already been entered against the old
+  // pointsPossible value, consider scaling them proportionally (e.g.
+  // points * newPossible / oldPossible) so existing grades don't silently
+  // become inconsistent with the new denominator. Not implemented yet.
+  pointsPossible = pointsPossibleDraft;
 }
 
 function handleBackToQueue() {
@@ -75,19 +89,40 @@ function handleSave(id, updates) {
 
   {#if questions === null}
     <Upload onParsed={handleParsed} />
-  {:else if selectedQuestion === null}
-    <Queue {questions} bind:statusFilter onSelect={handleSelect} />
   {:else}
-    {#key selectedQuestion.id}
-      <Detail
-        question={selectedQuestion}
-        {hasPrevious}
-        {hasNext}
-        onSave={handleSave}
-        onNext={handleNext}
-        onPrevious={handlePrevious}
-        onBack={handleBackToQueue}
-      />
-    {/key}
+    <div class="points-possible">
+      <label>
+        Points possible (all questions):
+        <input type="number" bind:value={pointsPossibleDraft} />
+      </label>
+      <button type="button" onclick={handleCommitPointsPossible}>Set</button>
+      <span>Current: {pointsPossible ?? "not set"}</span>
+    </div>
+
+    {#if selectedQuestion === null}
+      <Queue {questions} bind:statusFilter {pointsPossible} onSelect={handleSelect} />
+    {:else}
+      {#key selectedQuestion.id}
+        <Detail
+          question={selectedQuestion}
+          {pointsPossible}
+          {hasPrevious}
+          {hasNext}
+          onSave={handleSave}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
+          onBack={handleBackToQueue}
+        />
+      {/key}
+    {/if}
   {/if}
 </main>
+
+<style>
+  .points-possible {
+    display: flex;
+    align-items: center;
+    gap: 0.75em;
+    margin-block-end: 1em;
+  }
+</style>
