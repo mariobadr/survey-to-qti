@@ -291,7 +291,12 @@ Approach:
      [`src/components/Upload.svelte`](src/components/Upload.svelte). Wired
      to `parseSurveyCsv`; shows the parse summary and blocks continuing only
      on structurally invalid rows or zero valid questions, per Section 5.
-   - Queue/list view and detail/review view (Screens 2-3) not built yet.
+   - Queue/list view (Screen 2) **done** — see
+     [`src/components/Queue.svelte`](src/components/Queue.svelte). Table of
+     student/Bloom level/status/grade, filterable by status and Bloom
+     level; clicking a row selects it (`App.svelte` swaps in a placeholder
+     until the detail view exists).
+   - Detail/review view (Screen 3) not built yet.
 4. Autosave (localStorage/IndexedDB)
 5. Full QTI export (wire the reviewed/accepted data into the text2qti
    pipeline validated in step 1). In addition to normal accepted-question
@@ -395,3 +400,13 @@ Approach:
   `process.env.VITEST` so `dev`/`build` are unaffected), and
   `import.meta.url` isn't a real `file://` URL under jsdom, so the fixture
   path is resolved from `process.cwd()` instead in this test file.
+- 2026-07-16 — Built the Queue/list view (Section 5, Screen 2) —
+  `src/components/Queue.svelte`. Table of student/Bloom level/status/grade,
+  filterable by status and Bloom level (reuses `BLOOM_LEVELS` from
+  `src/csv/fieldNormalization.js` rather than duplicating the list).
+  Clicking a student's name selects that question; `App.svelte` shows a
+  placeholder until the detail view (Screen 3) exists, with a "Back to
+  queue" action. Verified end-to-end in a real browser: uploaded the
+  fabricated fixture, confirmed filtering by Bloom level and by status
+  (including the empty-results case) produces the right row counts, and
+  confirmed the select/back round-trip.
