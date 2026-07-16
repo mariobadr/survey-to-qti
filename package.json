@@ -1,0 +1,28 @@
+{
+  "name": "survey-to-qti",
+  "version": "1.0.0",
+  "description": "Client-side Canvas survey question review + QTI export tool",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "dev-test": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mariobadr/survey-to-qti.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/mariobadr/survey-to-qti/issues"
+  },
+  "homepage": "https://github.com/mariobadr/survey-to-qti#readme",
+  "dependencies": {
+    "papaparse": "^5.5.4"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}
