@@ -205,3 +205,50 @@ describe("Export: gradebook CSV download", () => {
     ).toBeEnabled();
   });
 });
+
+describe("Export: previews", () => {
+  it("shows the text2qti input, matching only accepted questions, that updates as the title changes", async () => {
+    render(Export, {
+      props: {
+        questions: SAMPLE_QUESTIONS,
+        pointsPossible: 1,
+        onBack: vi.fn(),
+      },
+    });
+
+    const preview = screen.getByText(/quiz title:/i, { selector: "pre" });
+    expect(preview).toHaveTextContent("Quiz title: Reviewed Questions");
+    expect(preview).toHaveTextContent("Stem s1");
+    expect(preview).toHaveTextContent("Stem s2");
+    expect(preview).not.toHaveTextContent("Stem s3");
+    expect(preview).not.toHaveTextContent("Stem s4");
+
+    await userEvent.clear(screen.getByLabelText(/quiz title/i));
+    await userEvent.type(screen.getByLabelText(/quiz title/i), "My Quiz");
+
+    expect(preview).toHaveTextContent("Quiz title: My Quiz");
+  });
+
+  it("shows the gradebook CSV as a table, including every student regardless of status", () => {
+    render(Export, {
+      props: {
+        questions: SAMPLE_QUESTIONS,
+        pointsPossible: 1,
+        onBack: vi.fn(),
+      },
+    });
+
+    const table = screen
+      .getByText(/preview gradebook csv/i)
+      .closest("details")
+      .querySelector("table");
+
+    expect(table).toHaveTextContent(
+      "FIXME: copy-paste the cell from a Gradebook export",
+    );
+    expect(table).toHaveTextContent("Points Possible");
+    expect(table).toHaveTextContent("Student s1");
+    expect(table).toHaveTextContent("Student s3");
+    expect(table).toHaveTextContent("Student s4");
+  });
+});

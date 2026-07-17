@@ -38,21 +38,25 @@ function formatPoints(points) {
 }
 
 /**
- * Build a Canvas gradebook-import-ready CSV: one row per parsed student
- * submission (Section 4's data model), regardless of review status --
- * students who aren't graded yet just get a blank score cell, so the TA can
- * re-export later once review is finished without losing anything already
- * imported into Canvas.
+ * Build the gradebook CSV's rows as plain arrays (header row first, then
+ * "Points Possible", then one row per student) -- split out from
+ * buildGradebookCsv so a table preview (Section 5, Export screen) can
+ * render the exact same data the download would contain without having to
+ * re-parse CSV text.
  *
- * @param {object[]} questions - All Question objects (Section 4).
+ * @param {object[]} questions - All Question objects (Section 4),
+ *   regardless of review status -- students who aren't graded yet just get
+ *   a blank score cell, so the TA can re-export later once review is
+ *   finished without losing anything already imported into Canvas.
  * @param {number | null} pointsPossible - The shared points-possible value
  *   (Section 4), written into the "Points Possible" row Canvas expects
  *   directly under the header.
- * @returns {string} CSV text, ready for download. The score column's header
- *   is a placeholder (SCORE_COLUMN_PLACEHOLDER) -- the TA must replace it by
- *   hand with the real header cell from a Canvas gradebook export.
+ * @returns {string[][]} Rows, each the same length as GRADEBOOK_HEADER plus
+ *   one score column. The score column's header is a placeholder
+ *   (SCORE_COLUMN_PLACEHOLDER) -- the TA must replace it by hand with the
+ *   real header cell from a Canvas gradebook export.
  */
-export function buildGradebookCsv(questions, pointsPossible) {
+export function buildGradebookRows(questions, pointsPossible) {
   const rows = [
     [...GRADEBOOK_HEADER, SCORE_COLUMN_PLACEHOLDER],
     ["Points Possible", "", "", "", "", "", formatPoints(pointsPossible)],
@@ -70,5 +74,17 @@ export function buildGradebookCsv(questions, pointsPossible) {
     ]);
   }
 
-  return Papa.unparse(rows);
+  return rows;
+}
+
+/**
+ * Build a Canvas gradebook-import-ready CSV from buildGradebookRows.
+ *
+ * @param {object[]} questions - All Question objects (Section 4). See
+ *   buildGradebookRows.
+ * @param {number | null} pointsPossible - See buildGradebookRows.
+ * @returns {string} CSV text, ready for download.
+ */
+export function buildGradebookCsv(questions, pointsPossible) {
+  return Papa.unparse(buildGradebookRows(questions, pointsPossible));
 }

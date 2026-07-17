@@ -209,7 +209,13 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
    title input (defaults to "Reviewed Questions (\<today's date\>)"),
    "Download QTI package" (accepted questions only, disabled with nothing
    accepted; see Section 6), and "Download gradebook CSV" (every parsed
-   student regardless of status, always enabled; see Section 7).
+   student regardless of status, always enabled; see Section 7). Each has a
+   collapsed-by-default preview the TA can expand before downloading: the
+   QTI package's preview is the raw text2qti input text (Section 6); the
+   gradebook CSV's preview is a scrollable table, not raw CSV text. Both
+   preview the exact same data the download would produce (same build
+   functions, just not yet serialized/zipped) and update live as the quiz
+   title or `pointsPossible` changes.
 
 ### Planned rework (from hands-on TA-perspective feedback)
 
@@ -297,7 +303,11 @@ export in [Section 10, step 6](#10-build-order-recommended).
 ## 7. Gradebook CSV export
 
 Implemented in
-[`src/gradebook/buildGradebookCsv.js`](src/gradebook/buildGradebookCsv.js).
+[`src/gradebook/buildGradebookCsv.js`](src/gradebook/buildGradebookCsv.js),
+which exports `buildGradebookRows` (plain row arrays) and `buildGradebookCsv`
+(the same rows, serialized) separately, so the Export screen's table preview
+renders the exact rows a download would contain without round-tripping
+through CSV text.
 
 The grade being exported here is the grade for the graded survey assignment
 itself (Section 1, step 2) — i.e. the TA's assessment of the quality of the
@@ -677,3 +687,12 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   Changed to a `FIXME` placeholder the TA replaces by hand with the real
   header cell, copy-pasted from a Canvas gradebook export of that survey
   assignment.
+- 2026-07-16 — Added a preview to each export on the Export screen (Section
+  5, Screen 3), collapsed by default: the QTI package's is the raw text2qti
+  input text (Section 6); the gradebook CSV's is a scrollable HTML table,
+  not raw CSV text (Section 7). Both are `$derived` from the same pure build
+  functions the actual downloads call (`buildQuizText`, and a new
+  `buildGradebookRows` split out of `buildGradebookCsv` so the table can
+  render plain row arrays instead of re-parsing CSV text), so a preview can
+  never drift from what a download would actually contain, and both update
+  live as the quiz title or `pointsPossible` change.

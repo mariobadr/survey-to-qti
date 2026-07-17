@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 import { describe, expect, it } from "vitest";
-import { buildGradebookCsv } from "../buildGradebookCsv.js";
+import { buildGradebookCsv, buildGradebookRows } from "../buildGradebookCsv.js";
 
 function makeQuestion({
   status = "accepted",
@@ -115,5 +115,15 @@ describe("buildGradebookCsv", () => {
 
     expect(row[2]).toBe(""); // SIS User ID
     expect(row[4]).toBe(""); // Integration ID
+  });
+});
+
+describe("buildGradebookRows", () => {
+  it("returns the same rows buildGradebookCsv serializes, as plain arrays", () => {
+    const questions = [makeQuestion()];
+
+    expect(buildGradebookRows(questions, 1)).toEqual(
+      parseRows(buildGradebookCsv(questions, 1)),
+    );
   });
 });
