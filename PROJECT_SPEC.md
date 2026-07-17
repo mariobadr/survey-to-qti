@@ -205,9 +205,12 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
      a live diff against `original`, not a permanent flag.
    - The status filter stays active while a row is expanded and after it
      collapses.
-3. **Export** — summary counts (accepted / rejected / pending), two actions:
-   - "Download QTI package" (accepted questions only)
-   - "Download gradebook CSV" (all graded submissions)
+3. **Export** — summary counts (accepted / rejected / pending), a quiz
+   title input (defaults to "Reviewed Questions (\<today's date\>)"), and
+   "Download QTI package" (accepted questions only, disabled with nothing
+   accepted; see Section 6). "Download
+   gradebook CSV" (Section 7) isn't built yet — blocked on a real gradebook
+   CSV sample.
 
 ### Planned rework (from hands-on TA-perspective feedback)
 
@@ -404,21 +407,26 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
    least-designed piece of this step.
 5. ~~Autosave (localStorage)~~ **Done** — see Section 8 and
    [`src/persistence/session.js`](src/persistence/session.js).
-6. Full QTI export (wire the reviewed/accepted data into the text2qti
-   pipeline validated in step 1). In addition to normal accepted-question
-   flows, cover these cases the spike didn't exercise:
-   - Multi-question quizzes (spike only built a single question)
-   - Per-question point values, once/if that becomes configurable (see
-     Section 11)
-   - Special characters in stems/options/feedback (quotes, markdown
-     metacharacters like `*`/`_`/backticks, non-ASCII text) — confirm they
-     survive the text2qti-format serialization without corrupting the
-     format's own syntax
-   - Confirm LaTeX/math-rendering code paths (`--pandoc-mathml`,
-     `run_code_blocks`) are never invoked, since they shell out via
-     `subprocess`, which doesn't exist in Pyodide — this project's plain
-     multiple-choice format shouldn't need them, but the export builder
-     should not accidentally trigger them
+6. ~~Full QTI export~~ **Done, real-browser-verified** — see Section 6 and
+   [`src/qti/`](src/qti/). `buildQuizText.js` (pure, fully
+   unit-tested) generates the quiz text from accepted questions only, with
+   Markdown-special characters backslash-escaped and embedded newlines
+   collapsed to a single line, so quotes/`*`/`_`/backticks/etc. in
+   student-submitted text can't corrupt the format's own syntax or
+   accidentally start a new question/choice line — the case the spike
+   explicitly hadn't exercised. Multi-question quizzes are exercised too
+   (one block per accepted question). `pyodideRuntime.js` /
+   `generateQtiZip.js` wire this into the same Pyodide + text2qti pipeline
+   the spike validated (CDN-loaded, not bundled), with the Pyodide
+   boot/install cached across repeated exports in the same page session.
+   Per-question points are a fixed 1, not configurable (per the Section 6
+   placeholder decision) — the `pointsPossible` value stays scoped to the
+   gradebook export (Section 7) only. LaTeX/`subprocess` code paths are
+   never invoked since nothing in this pipeline calls them.
+   **Verified**: exported a real QTI package (with 3 accepted questions
+   edited during review and 2 rejected, confirming only accepted ones made
+   it through), imported it into Quercus, and previewed the quiz
+   successfully.
 7. Gradebook CSV merge/export (needs a real gradebook CSV sample to finalize
    column handling)
 
@@ -588,3 +596,26 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   `src/persistence/__tests__/session.test.js` and `src/__tests__/App.test.js`
   (new — App.svelte's first test file) covering the resume prompt,
   Resume/Start over, autosave-after-continue, and the failure banner.
+- 2026-07-16 — Built Section 10 step 6 (full QTI export) — new
+  `src/qti/` module (`buildQuizText.js`, `pyodideRuntime.js`,
+  `generateQtiZip.js`) and a new Export screen
+  (`src/components/Export.svelte`, reachable via a "Go to export" button
+  in `App.svelte`'s toolbar). `buildQuizText.js` is the part most worth
+  getting right and is fully unit-tested: only `review.status ===
+  "accepted"` questions are included; every Markdown-special character
+  (per Markdown.pl/Python-Markdown's standard escapable set) is
+  backslash-escaped in stem/response/feedback text, and embedded newlines
+  are collapsed to a single line, so arbitrary student-submitted text
+  can't corrupt text2qti's own line-based syntax — the case Section 6
+  flagged as untested by the spike. Per-question points are a fixed 1
+  (not configurable in this build, confirmed separate from the
+  gradebook-only `pointsPossible`). `pyodideRuntime.js` reuses the exact
+  CDN URL and Config/Quiz/QTI-direct approach the spike validated, caches
+  the booted runtime across repeated exports, and doesn't cache a failed
+  attempt (so a transient network error doesn't permanently break the
+  rest of the page session). Added
+  `src/qti/__tests__/{buildQuizText,pyodideRuntime,generateQtiZip}.test.js`
+  and `src/components/__tests__/Export.test.js`, all with Pyodide mocked
+  out — this environment can't run real Pyodide/WASM against the real CDN.
+  Real-browser-verified: exported, imported into Quercus, and previewed
+  successfully with a mix of edited-and-accepted and rejected questions.

@@ -1,4 +1,5 @@
 <script>
+import Export from "./components/Export.svelte";
 import Queue from "./components/Queue.svelte";
 import Upload from "./components/Upload.svelte";
 import {
@@ -9,6 +10,9 @@ import {
 
 let questions = $state(null);
 let statusFilter = $state("all");
+
+// "review" (Question Review view, Screen 2) or "export" (Screen 3).
+let view = $state("review");
 
 // pointsPossible is a single value shared across every question (Planned
 // rework item 4), not a per-question field -- it's set here, via its own
@@ -117,6 +121,8 @@ $effect(() => {
     </section>
   {:else if questions === null}
     <Upload onParsed={handleParsed} />
+  {:else if view === "export"}
+    <Export {questions} onBack={() => (view = "review")} />
   {:else}
     <div class="points-possible">
       <label>
@@ -125,6 +131,9 @@ $effect(() => {
       </label>
       <button type="button" onclick={handleCommitPointsPossible}>Set</button>
       <span>Current: {pointsPossible ?? "not set"}</span>
+      <button type="button" onclick={() => (view = "export")}>
+        Go to export
+      </button>
     </div>
 
     <Queue
