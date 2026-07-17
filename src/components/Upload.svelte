@@ -8,10 +8,14 @@ import { parseSurveyCsv } from "../csv/parseSurveyCsv.js";
  *   Planned rework item 6) and the TA's chosen default-attempt setting,
  *   once the TA clicks "Continue to review queue" (Section 5, Screen 1 ->
  *   Screen 2).
+ * @property {boolean} [hasExistingQuestions] - True if questions from an
+ *   earlier upload are already loaded (the TA navigated back to Upload via
+ *   the nav bar rather than arriving here fresh). Continuing then discards
+ *   that review progress, so it's confirmed first.
  */
 
 /** @type {Props} */
-let { onParsed } = $props();
+let { onParsed, hasExistingQuestions = false } = $props();
 
 let fileName = $state(null);
 let result = $state(null);
@@ -70,9 +74,19 @@ async function handleFileChange(event) {
 /**
  * Hand the parsed, valid questions and the chosen default-attempt setting
  * off to the parent (App.svelte) so it can move on to the review queue.
- * Only reachable when `canContinue` is true.
+ * Only reachable when `canContinue` is true. If questions from an earlier
+ * upload are already loaded, this would discard that review progress, so
+ * it's confirmed first.
  */
 function handleContinue() {
+  if (
+    hasExistingQuestions &&
+    !window.confirm(
+      "Uploading this file will replace the questions already loaded and discard any review progress. Continue?",
+    )
+  ) {
+    return;
+  }
   onParsed(result.questions, defaultAttempt);
 }
 </script>
@@ -80,6 +94,13 @@ function handleContinue() {
 <section>
   <h2>Upload</h2>
   <p>Select the Canvas survey CSV export to review.</p>
+
+  {#if hasExistingQuestions}
+    <p class="warning">
+      Questions from an earlier upload are already loaded. Uploading a new
+      file will replace them and discard any review progress.
+    </p>
+  {/if}
 
   <input
     type="file"
@@ -176,6 +197,9 @@ function handleContinue() {
   }
   .error {
     color: #b00020;
+  }
+  .warning {
+    color: #8a6100;
   }
   .error-list {
     font-size: 0.9em;

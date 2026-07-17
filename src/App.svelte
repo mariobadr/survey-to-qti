@@ -22,8 +22,12 @@ let statusFilter = $state("all");
 let attemptSelection = $state({});
 let defaultAttempt = $state("first");
 
-// "review" (Question Review view, Screen 2) or "export" (Screen 3).
-let view = $state("review");
+// Which of the three screens is showing: "upload" (Screen 1), "review"
+// (Screen 2), or "export" (Screen 3). A persistent nav bar (below) lets the
+// TA switch freely once questions are loaded -- this isn't just a linear
+// wizard step. Review/export are disabled in that nav until `questions` is
+// non-null, since there's nothing to review or export yet.
+let view = $state("upload");
 
 // pointsPossible is a single value shared across every question (Planned
 // rework item 4), not a per-question field -- it's set here, via its own
@@ -67,6 +71,7 @@ function handleParsed(parsedQuestions, chosenDefaultAttempt) {
   questions = parsedQuestions;
   defaultAttempt = chosenDefaultAttempt;
   attemptSelection = {};
+  view = "review";
 }
 
 /**
@@ -82,6 +87,7 @@ function handleResume() {
   defaultAttempt = savedSession.defaultAttempt;
   gradeScaleNotice = null;
   sessionChoice = "decided";
+  view = "review";
 }
 
 function handleStartOver() {
@@ -189,55 +195,96 @@ $effect(() => {
       <button type="button" onclick={handleResume}>Resume</button>
       <button type="button" onclick={handleStartOver}>Start over</button>
     </section>
-  {:else if questions === null}
-    <Upload onParsed={handleParsed} />
-  {:else if view === "export"}
-    <Export
-      {questions}
-      {pointsPossible}
-      {attemptSelection}
-      {defaultAttempt}
-      onBack={() => (view = "review")}
-    />
   {:else}
-    <div class="points-possible">
-      <label>
-        Points possible (all questions):
-        <input type="number" min="0" bind:value={pointsPossibleDraft} />
-      </label>
+    <nav class="tabs">
       <button
         type="button"
-        disabled={pointsPossibleDraftInvalid}
-        onclick={handleCommitPointsPossible}
+        class:active={view === "upload"}
+        onclick={() => (view = "upload")}
       >
-        Set
+        Upload
       </button>
-      <span>Current: {pointsPossible ?? "not set"}</span>
-      <button type="button" onclick={() => (view = "export")}>
-        Go to export
+      <button
+        type="button"
+        class:active={view === "review"}
+        disabled={questions === null}
+        title={questions === null ? "Upload a file first" : undefined}
+        onclick={() => (view = "review")}
+      >
+        Review
       </button>
-    </div>
+      <button
+        type="button"
+        class:active={view === "export"}
+        disabled={questions === null}
+        title={questions === null ? "Upload a file first" : undefined}
+        onclick={() => (view = "export")}
+      >
+        Export
+      </button>
+    </nav>
 
-    {#if pointsPossibleDraftInvalid}
-      <p class="error">Points possible can't be negative.</p>
+    {#if view === "upload"}
+      <Upload onParsed={handleParsed} hasExistingQuestions={questions !== null} />
+    {:else if view === "export" && questions !== null}
+      <Export
+        {questions}
+        {pointsPossible}
+        {attemptSelection}
+        {defaultAttempt}
+        onBack={() => (view = "review")}
+      />
+    {:else if questions !== null}
+      <div class="points-possible">
+        <label>
+          Points possible (all questions):
+          <input type="number" min="0" bind:value={pointsPossibleDraft} />
+        </label>
+        <button
+          type="button"
+          disabled={pointsPossibleDraftInvalid}
+          onclick={handleCommitPointsPossible}
+        >
+          Set
+        </button>
+        <span>Current: {pointsPossible ?? "not set"}</span>
+      </div>
+
+      {#if pointsPossibleDraftInvalid}
+        <p class="error">Points possible can't be negative.</p>
+      {/if}
+
+      {#if gradeScaleNotice}
+        <p class="grade-scale-notice" role="status">{gradeScaleNotice}</p>
+      {/if}
+
+      <Queue
+        {questions}
+        bind:statusFilter
+        bind:attemptSelection
+        {defaultAttempt}
+        {pointsPossible}
+        onSave={handleSave}
+      />
     {/if}
-
-    {#if gradeScaleNotice}
-      <p class="grade-scale-notice" role="status">{gradeScaleNotice}</p>
-    {/if}
-
-    <Queue
-      {questions}
-      bind:statusFilter
-      bind:attemptSelection
-      {defaultAttempt}
-      {pointsPossible}
-      onSave={handleSave}
-    />
   {/if}
 </main>
 
 <style>
+  .tabs {
+    display: flex;
+    gap: 0.5em;
+    margin-block-end: 1em;
+    border-bottom: 1px solid #ccc;
+    padding-block-end: 0.5em;
+  }
+  .tabs button {
+    padding: 0.4em 0.9em;
+  }
+  .tabs button.active {
+    font-weight: bold;
+    background: #e0e0e0;
+  }
   .points-possible {
     display: flex;
     align-items: center;

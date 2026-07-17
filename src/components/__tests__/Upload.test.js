@@ -152,6 +152,49 @@ describe("Upload", () => {
     expect(defaultAttempt).toBe("latest");
   });
 
+  it("warns and confirms before replacing already-loaded questions, and skips onParsed if canceled", async () => {
+    const onParsed = vi.fn();
+    render(Upload, { props: { onParsed, hasExistingQuestions: true } });
+
+    expect(
+      screen.getByText(/questions from an earlier upload are already loaded/i),
+    ).toBeInTheDocument();
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const input = screen.getByLabelText(/canvas survey csv export/i);
+    await userEvent.upload(
+      input,
+      csvFile(fixtureCsv, "fabricated-survey-export.csv"),
+    );
+    const continueButton = await screen.findByRole("button", {
+      name: /continue to review queue/i,
+    });
+    await userEvent.click(continueButton);
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(onParsed).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("calls onParsed once replacing already-loaded questions is confirmed", async () => {
+    const onParsed = vi.fn();
+    render(Upload, { props: { onParsed, hasExistingQuestions: true } });
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const input = screen.getByLabelText(/canvas survey csv export/i);
+    await userEvent.upload(
+      input,
+      csvFile(fixtureCsv, "fabricated-survey-export.csv"),
+    );
+    const continueButton = await screen.findByRole("button", {
+      name: /continue to review queue/i,
+    });
+    await userEvent.click(continueButton);
+
+    expect(onParsed).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
+  });
+
   it("disables Continue and shows an error for a structurally invalid CSV", async () => {
     const header = Array.from(
       { length: EXPECTED_COLUMN_COUNT },

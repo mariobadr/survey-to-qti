@@ -146,7 +146,7 @@ describe("App: autosave", () => {
   });
 });
 
-describe("App: pointsPossible default and grade scaling", () => {
+describe("App: nav bar, pointsPossible default, and grade scaling", () => {
   async function uploadAndContinue() {
     render(App);
 
@@ -221,6 +221,94 @@ describe("App: pointsPossible default and grade scaling", () => {
       screen.getByText(/points possible can't be negative/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Current: 1")).toBeInTheDocument();
+  });
+
+  it("Review and Export tabs are disabled until a file is uploaded, then enabled", async () => {
+    render(App);
+
+    expect(screen.getByRole("button", { name: "Review" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export" })).toBeDisabled();
+
+    const input = screen.getByLabelText(/canvas survey csv export/i);
+    await userEvent.upload(
+      input,
+      new File([fixtureCsv], "fabricated-survey-export.csv", {
+        type: "text/csv",
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /continue to review queue/i }),
+    );
+    await waitFor(() => screen.getByText("Alice Anderson"));
+
+    expect(screen.getByRole("button", { name: "Review" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Export" })).toBeEnabled();
+  });
+
+  it("lets the TA freely navigate between Upload, Review, and Export via the nav bar", async () => {
+    await uploadAndContinue();
+
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(
+      screen.getByRole("heading", { name: /^export$/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+    expect(
+      screen.getByRole("heading", { name: /^upload$/i }),
+    ).toBeInTheDocument();
+    // Navigating to Upload doesn't discard the already-loaded questions.
+    expect(
+      screen.getByText(/questions from an earlier upload are already loaded/i),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(screen.getByText("Alice Anderson")).toBeInTheDocument();
+  });
+
+  it("confirms before replacing already-loaded questions with a new upload, and does nothing if canceled", async () => {
+    await uploadAndContinue();
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const input = screen.getByLabelText(/canvas survey csv export/i);
+    await userEvent.upload(
+      input,
+      new File([fixtureCsv], "fabricated-survey-export.csv", {
+        type: "text/csv",
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /continue to review queue/i }),
+    );
+
+    expect(confirmSpy).toHaveBeenCalled();
+    // Still on Upload (canceled) -- the nav didn't switch to Review.
+    expect(
+      screen.getByRole("heading", { name: /^upload$/i }),
+    ).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
+  it("replaces already-loaded questions with a new upload once confirmed", async () => {
+    await uploadAndContinue();
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const input = screen.getByLabelText(/canvas survey csv export/i);
+    await userEvent.upload(
+      input,
+      new File([fixtureCsv], "fabricated-survey-export.csv", {
+        type: "text/csv",
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /continue to review queue/i }),
+    );
+
+    expect(screen.getByText("Alice Anderson")).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it("allows 0 as points possible and scales an existing grade down to 0", async () => {
