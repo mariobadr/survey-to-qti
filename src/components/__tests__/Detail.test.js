@@ -196,7 +196,9 @@ describe("Detail", () => {
     expect(screen.getByRole("radio", { name: "Accept" })).toBeEnabled();
 
     await userEvent.click(screen.getByRole("radio", { name: "Accept" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
@@ -214,7 +216,9 @@ describe("Detail", () => {
       },
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
@@ -226,7 +230,9 @@ describe("Detail", () => {
     const { onSave } = renderDetail();
 
     await userEvent.type(screen.getByLabelText(/stem/i), " Extra text.");
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
@@ -239,7 +245,9 @@ describe("Detail", () => {
 
     await userEvent.type(screen.getByLabelText(/^points/i), "4");
     await userEvent.click(screen.getByRole("radio", { name: "Reject" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
@@ -263,7 +271,9 @@ describe("Detail", () => {
     // Content matches `original` (both default to BASE_CONTENT) -- no edits
     // this session either, so the live diff says false regardless of the
     // stale flag above.
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
@@ -278,7 +288,9 @@ describe("Detail", () => {
     await userEvent.type(stem, " Extra text.");
     await userEvent.type(stem, "{backspace}".repeat(" Extra text.".length));
 
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledWith(
       "s1",
@@ -303,11 +315,13 @@ describe("Detail", () => {
     expect(screen.getByText(/55 words, limit 50/)).toBeInTheDocument();
   });
 
-  it("Close commits the draft and calls onClose, without saving twice", async () => {
+  it("Save and Close commits the draft and calls onClose, without saving twice", async () => {
     const { onSave, onClose } = renderDetail();
 
     await userEvent.type(screen.getByLabelText(/^points/i), "4");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith(
@@ -319,7 +333,23 @@ describe("Detail", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("commits the current draft automatically when unmounted without an explicit Save or Close", async () => {
+  it("Discard and Close calls onClose without saving, and doesn't save again on unmount", async () => {
+    const { onSave, onClose, unmount } = renderDetail();
+
+    await userEvent.type(screen.getByLabelText(/^points/i), "4");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Discard and Close" }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("commits the current draft automatically when unmounted without an explicit Save", async () => {
     // Mirrors what happens when the parent Queue row collapses or a
     // different row is expanded instead -- Detail is torn down without any
     // button inside it being clicked, so the auto-commit has to happen on

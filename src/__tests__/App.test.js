@@ -177,7 +177,9 @@ describe("App: nav bar, pointsPossible default, and grade scaling", () => {
       screen.getByRole("button", { name: "Alice Anderson" }),
     );
     await userEvent.type(screen.getByLabelText(/^points:/i), "0.5");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     // Change points possible from 1 to 2.
     const pointsPossibleInput = screen.getByLabelText(/points possible/i);
@@ -318,7 +320,9 @@ describe("App: nav bar, pointsPossible default, and grade scaling", () => {
       screen.getByRole("button", { name: "Alice Anderson" }),
     );
     await userEvent.type(screen.getByLabelText(/^points:/i), "0.5");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     const pointsPossibleInput = screen.getByLabelText(/points possible/i);
     await userEvent.clear(pointsPossibleInput);

@@ -27,7 +27,7 @@ const RESPONSE_LETTERS = ["A", "B", "C", "D"];
  * @property {() => void} onClose - Collapses this row back in the parent
  *   Queue table. Doesn't need to commit the draft itself -- collapsing
  *   unmounts this component, and the onDestroy hook below commits on the
- *   way out regardless of why it's unmounting.
+ *   way out for every case except Discard (see `discarded` below).
  */
 
 /** @type {Props} */
@@ -80,9 +80,9 @@ let keywords = $derived(parseKeywords(keywordsText));
 let canAccept = $derived(correctAnswer !== null);
 
 // isDirty compares against the *live* question.question (which reflects
-// the last save, if any -- Detail stays mounted across a plain Save click,
-// only remounting when the parent expands a different row), so it
-// correctly clears after saving.
+// the last save, if any -- e.g. from the onDestroy safety net committing a
+// still-dirty draft when the parent expands a different row out from under
+// this instance), so it correctly reflects unsaved edits in that case too.
 let isDirty = $derived(
   status !== question.review.status ||
     points !== question.review.grade.points ||
@@ -149,21 +149,28 @@ function commit() {
   });
 }
 
-// Save and Close (below) both commit explicitly before doing anything else.
-// This onDestroy is the safety net for the one case neither covers:
-// expanding a *different* row while this one is still open, which unmounts
-// this instance from the outside (the parent Queue row's own click handler,
-// not anything in this component) with no chance to run a click handler
-// first. Committing twice in the Save/Close cases is harmless -- the second
-// call just resends the same already-saved values.
-onDestroy(commit);
+// Set by Discard so the onDestroy safety net below doesn't re-commit the
+// draft it just intentionally threw away.
+let discarded = false;
+
+// Save (below) commits explicitly before doing anything else. This
+// onDestroy is the safety net for the case Save doesn't cover: expanding a
+// *different* row while this one is still open, which unmounts this
+// instance from the outside (the parent Queue row's own click handler, not
+// anything in this component) with no chance to run a click handler first.
+// Committing twice in the Save case is harmless -- the second call just
+// resends the same already-saved values.
+onDestroy(() => {
+  if (!discarded) commit();
+});
 
 function handleSaveClick() {
   commit();
+  onClose();
 }
 
-function handleCloseClick() {
-  commit();
+function handleDiscardClick() {
+  discarded = true;
   onClose();
 }
 </script>
@@ -323,8 +330,8 @@ function handleCloseClick() {
   </fieldset>
 
   <div class="nav">
-    <button type="button" class="primary" onclick={handleSaveClick}>Save</button>
-    <button type="button" onclick={handleCloseClick}>Close</button>
+    <button type="button" class="primary" onclick={handleSaveClick}>Save and Close</button>
+    <button type="button" onclick={handleDiscardClick}>Discard and Close</button>
   </div>
 </section>
 

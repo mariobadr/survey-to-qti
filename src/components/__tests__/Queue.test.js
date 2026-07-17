@@ -165,7 +165,9 @@ describe("Queue", () => {
     );
     expect(screen.getByLabelText(/stem/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and Close" }),
+    );
 
     expect(screen.queryByLabelText(/stem/i)).not.toBeInTheDocument();
   });
