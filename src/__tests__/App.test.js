@@ -146,3 +146,107 @@ describe("App: autosave", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });
+
+describe("App: pointsPossible default and grade scaling", () => {
+  async function uploadAndContinue() {
+    render(App);
+
+    const input = screen.getByLabelText(/canvas survey csv export/i);
+    await userEvent.upload(
+      input,
+      new File([fixtureCsv], "fabricated-survey-export.csv", {
+        type: "text/csv",
+      }),
+    );
+    await waitFor(() => screen.getByText(/7 valid questions ready for review/));
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue to review queue/i }),
+    );
+    await waitFor(() => screen.getByText("Alice Anderson"));
+  }
+
+  it("defaults pointsPossible to 1", async () => {
+    await uploadAndContinue();
+
+    expect(screen.getByText("Current: 1")).toBeInTheDocument();
+  });
+
+  it("scales an already-entered grade and notifies the TA when pointsPossible changes", async () => {
+    await uploadAndContinue();
+
+    // Grade Alice's question 0.5 out of the default 1 point possible.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Alice Anderson" }),
+    );
+    await userEvent.type(screen.getByLabelText(/^points:/i), "0.5");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Change points possible from 1 to 2.
+    const pointsPossibleInput = screen.getByLabelText(/points possible/i);
+    await userEvent.clear(pointsPossibleInput);
+    await userEvent.type(pointsPossibleInput, "2");
+    await userEvent.click(screen.getByRole("button", { name: "Set" }));
+
+    expect(screen.getByText("Current: 2")).toBeInTheDocument();
+    expect(
+      screen.getByText(/scaled 1 existing grade.*out of 1.*out of 2/i),
+    ).toBeInTheDocument();
+
+    // 0.5 out of 1 scaled to out of 2 is 1.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Alice Anderson" }),
+    );
+    expect(screen.getByLabelText(/^points:/i)).toHaveValue(1);
+  });
+
+  it("shows no scaling notice when there's nothing to scale (no grades entered yet)", async () => {
+    await uploadAndContinue();
+
+    const pointsPossibleInput = screen.getByLabelText(/points possible/i);
+    await userEvent.clear(pointsPossibleInput);
+    await userEvent.type(pointsPossibleInput, "2");
+    await userEvent.click(screen.getByRole("button", { name: "Set" }));
+
+    expect(screen.getByText("Current: 2")).toBeInTheDocument();
+    expect(screen.queryByText(/scaled/i)).not.toBeInTheDocument();
+  });
+
+  it("disables Set and shows an error for a negative draft, without committing", async () => {
+    await uploadAndContinue();
+
+    const pointsPossibleInput = screen.getByLabelText(/points possible/i);
+    await userEvent.clear(pointsPossibleInput);
+    await userEvent.type(pointsPossibleInput, "-1");
+
+    expect(screen.getByRole("button", { name: "Set" })).toBeDisabled();
+    expect(
+      screen.getByText(/points possible can't be negative/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Current: 1")).toBeInTheDocument();
+  });
+
+  it("allows 0 as points possible and scales an existing grade down to 0", async () => {
+    await uploadAndContinue();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Alice Anderson" }),
+    );
+    await userEvent.type(screen.getByLabelText(/^points:/i), "0.5");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    const pointsPossibleInput = screen.getByLabelText(/points possible/i);
+    await userEvent.clear(pointsPossibleInput);
+    await userEvent.type(pointsPossibleInput, "0");
+    await userEvent.click(screen.getByRole("button", { name: "Set" }));
+
+    expect(screen.getByText("Current: 0")).toBeInTheDocument();
+    expect(
+      screen.getByText(/scaled 1 existing grade.*out of 1.*out of 0/i),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Alice Anderson" }),
+    );
+    expect(screen.getByLabelText(/^points:/i)).toHaveValue(0);
+  });
+});

@@ -117,10 +117,23 @@ question is editable during review, review state is written continuously).
 shared by every question, held once in `App.svelte` state (`pointsPossible`,
 committed from a top-level draft input via a "Set" button) and threaded down
 read-only to Queue (grade column) and the review view. Editing it lives
-outside any one question's draft/commit cycle. TODO: when `pointsPossible`
-changes after some `points` have already been entered, consider scaling those
-`points` proportionally so grades don't silently become inconsistent with the
-new denominator — not implemented.
+outside any one question's draft/commit cycle. Defaults to `1` (the common
+case) rather than unset. Must be non-negative — the "Set" button is disabled
+with an inline error for a negative draft value (0 is allowed; Canvas
+itself supports a 0-point assignment). When `pointsPossible` changes after
+some `points` have already been entered, those `points` are rescaled
+proportionally (e.g. 0.5/1 becomes 1/2; or 0.5/1 becomes 0/0 if
+`pointsPossible` is changed to 0) via
+[`src/scaleGrades.js`](src/scaleGrades.js) — pure, fully unit-tested,
+rounds to 2 decimal places to avoid floating-point noise — so
+grades never silently become inconsistent with the new denominator. Only
+scales when going from a positive old value to a different, non-negative
+new value (clearing the field or re-committing the same value just commits
+as-is, nothing to scale between; scaling *from* 0 or unset has no
+coherent ratio to scale by). A non-blocking notice (`role="status"`, same
+spirit as the autosave-failure banner) confirms how many grades were
+rescaled and from/to what, so this
+never happens invisibly to the TA.
 
 ### CSV → data model mapping
 
@@ -269,8 +282,8 @@ Six items identified trying Screens 1-3 end to end. All six are done.
    `wasEdited` is a live diff against it instead of a monotonic flag.
 3. ~~Remove the comment field~~ **Done** — no gradebook CSV column exists for it (Section 7).
 4. ~~`pointsPossible` becomes a single shared value~~ **Done** — set once in `App.svelte`,
-   shown read-only per question. TODO not implemented: rescaling already-entered `points`
-   when `pointsPossible` changes.
+   shown read-only per question, defaults to `1`. Rescaling already-entered `points`
+   when `pointsPossible` changes is also done — see Section 4.
 5. ~~Remove the Bloom-level filter~~ **Done** — not useful in practice; the table column
    stays, just not filterable.
 6. ~~Parse and show every attempt per student, not just the earliest~~ **Done** —
@@ -806,3 +819,18 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   column to "Graded attempt" (with a tooltip explaining what it controls)
   and adding an inline warning next to the dropdown whenever a student has
   an accepted attempt that isn't the selected one.
+- 2026-07-16 — `pointsPossible` (Section 4) now defaults to `1` instead of
+  unset, and changing it rescales already-entered grades proportionally
+  (e.g. 0.5/1 becomes 1/2) rather than leaving them silently inconsistent
+  with the new denominator -- the "Planned rework" item 4 TODO, now done.
+  Added [`src/scaleGrades.js`](src/scaleGrades.js) (pure, fully
+  unit-tested), rounding to 2 decimal places to avoid floating-point noise.
+  Only scales from a positive old value to a different, non-negative new
+  one -- clearing the field or re-committing the same value just commits
+  as-is. A non-blocking `role="status"` notice on the review screen
+  confirms how many grades were rescaled and from/to what points-possible
+  value, in the same spirit as the existing autosave-failure banner.
+  `pointsPossible` must be non-negative (0 is allowed -- Canvas itself
+  supports a 0-point assignment): the "Set" button is disabled with an
+  inline error for a negative draft value, rather than silently clamping
+  or rejecting after the fact.

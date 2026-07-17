@@ -10,7 +10,7 @@ up. Do not treat this file's output as real Canvas data.
 
 Once a real submission exists, re-run the actual export through the parser
 and spot-check the result before trusting it for grading (see
-PROJECT_SPEC.md, Section 11).
+PROJECT_SPEC.md, Section 10).
 
 Usage: python3 tools/generate_fixture_csv.py > fixtures/fabricated-survey-export.csv
 """
