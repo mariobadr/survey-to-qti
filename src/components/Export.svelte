@@ -1,4 +1,5 @@
 <script>
+import { buildGradebookCsv } from "../gradebook/buildGradebookCsv.js";
 import { buildQuizText } from "../qti/buildQuizText.js";
 import { generateQtiZip } from "../qti/generateQtiZip.js";
 
@@ -6,18 +7,23 @@ import { generateQtiZip } from "../qti/generateQtiZip.js";
  * @typedef {object} Props
  * @property {object[]} questions - All Question objects (Section 4's data
  *   model), unfiltered -- only `review.status === "accepted"` ones make it
- *   into the QTI package (Section 6).
+ *   into the QTI package (Section 6); the gradebook CSV (Section 7) instead
+ *   includes every student, regardless of status.
+ * @property {number | null} pointsPossible - The shared points-possible
+ *   value (Section 4), written into the gradebook CSV's "Points Possible"
+ *   row.
  * @property {() => void} onBack - Returns to the Question Review view.
  */
 
 /** @type {Props} */
-let { questions, onBack } = $props();
+let { questions, pointsPossible, onBack } = $props();
 
 let title = $state(
   `Reviewed Questions (${new Date().toISOString().slice(0, 10)})`,
 );
 let status = $state("idle"); // "idle" | "loading" | "error" | "done"
 let errorMessage = $state(null);
+let gradebookDownloaded = $state(false);
 
 let accepted = $derived(
   questions.filter((q) => q.review.status === "accepted"),
@@ -27,15 +33,23 @@ let rejected = $derived(
 );
 let pending = $derived(questions.filter((q) => q.review.status === "pending"));
 
-function downloadZip(bytes, filename) {
-  const url = URL.createObjectURL(
-    new Blob([bytes], { type: "application/zip" }),
-  );
+function sanitizeFilename(name) {
+  return name.replace(/[\\/:*?"<>|]/g, "-") || "quiz";
+}
+
+function downloadBlob(content, type, filename) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function handleDownloadGradebookCsv() {
+  const csv = buildGradebookCsv(questions, pointsPossible);
+  downloadBlob(csv, "text/csv", `${sanitizeFilename(title)}-grades.csv`);
+  gradebookDownloaded = true;
 }
 
 /**
@@ -50,8 +64,7 @@ async function handleDownload() {
   try {
     const quizText = buildQuizText(questions, title);
     const zipBytes = await generateQtiZip(quizText);
-    const filename = `${title.replace(/[\\/:*?"<>|]/g, "-") || "quiz"}.zip`;
-    downloadZip(zipBytes, filename);
+    downloadBlob(zipBytes, "application/zip", `${sanitizeFilename(title)}.zip`);
     status = "done";
   } catch (err) {
     status = "error";
@@ -83,6 +96,9 @@ async function handleDownload() {
     >
       Download QTI package
     </button>
+    <button type="button" onclick={handleDownloadGradebookCsv}>
+      Download gradebook CSV
+    </button>
   </div>
 
   {#if accepted.length === 0}
@@ -102,6 +118,10 @@ async function handleDownload() {
 
   {#if status === "done"}
     <p>Downloaded -- check your browser's downloads for the QTI zip file.</p>
+  {/if}
+
+  {#if gradebookDownloaded}
+    <p>Downloaded -- check your browser's downloads for the gradebook CSV.</p>
   {/if}
 </section>
 

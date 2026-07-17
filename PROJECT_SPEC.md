@@ -206,11 +206,10 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
    - The status filter stays active while a row is expanded and after it
      collapses.
 3. **Export** — summary counts (accepted / rejected / pending), a quiz
-   title input (defaults to "Reviewed Questions (\<today's date\>)"), and
+   title input (defaults to "Reviewed Questions (\<today's date\>)"),
    "Download QTI package" (accepted questions only, disabled with nothing
-   accepted; see Section 6). "Download
-   gradebook CSV" (Section 7) isn't built yet — blocked on a real gradebook
-   CSV sample.
+   accepted; see Section 6), and "Download gradebook CSV" (every parsed
+   student regardless of status, always enabled; see Section 7).
 
 ### Planned rework (from hands-on TA-perspective feedback)
 
@@ -297,20 +296,44 @@ export in [Section 10, step 6](#10-build-order-recommended).
 
 ## 7. Gradebook CSV export
 
+Implemented in
+[`src/gradebook/buildGradebookCsv.js`](src/gradebook/buildGradebookCsv.js).
+
+The grade being exported here is the grade for the graded survey assignment
+itself (Section 1, step 2) — i.e. the TA's assessment of the quality of the
+question a student ideated and submitted. That assignment already exists in
+the Canvas course; it's what produced the CSV this app parses in the first
+place (Section 4). This is entirely separate from the QTI package (Section
+6): that's a *new* quiz built from the accepted questions, for later use,
+and has nothing to do with any individual student's grade.
+
 Canvas's gradebook CSV importer matches rows using `Student`, `ID`,
 `SIS User ID`, `SIS Login ID`, and `Section` columns, plus one column per
-assignment containing the score.
+assignment containing the score. Confirmed against a real one-column export
+from Quercus (see Changelog) — no uploaded template needed: every column
+Canvas matches on is already captured per student at parse time (Section 4's
+`submission.student`/`submission.section`), so the CSV is built from
+scratch.
 
-Approach:
-- The TA will supply (upload) the actual Canvas gradebook export CSV for the
-  relevant assignment as a starting template — this already has correctly
-  formatted student-matching columns.
-- The app merges in the grades entered during review (matched by student
-  identifier) into the appropriate assignment column, without touching any
-  other columns.
-- Avoid Canvas's reserved column names ("Final Grade," "Current Score,"
-  "Final Points," etc.) when naming any new column, since Canvas ignores
-  those on import.
+- Header row: `Student,ID,SIS User ID,SIS Login ID,Integration ID,Section,<score column>`.
+  `SIS User ID` and `Integration ID` are always blank — not present anywhere
+  in the Canvas survey export this app parses, and Canvas still matches rows
+  fine on `ID` + `SIS Login ID` alone.
+- The score column's header is a fixed placeholder,
+  `"FIXME: copy-paste the cell from a Gradebook export"`. Canvas matches the
+  score column by an exact header match including the `(<assignment id>)`
+  suffix it appends, but the survey-submission CSV this app parses (Section
+  4) doesn't carry the assignment's name or Canvas ID anywhere in it — so
+  there's nothing to build an exact, Canvas-matching header from. The TA
+  replaces the placeholder by hand with the real header cell, copy-pasted
+  from an actual Canvas gradebook export of that survey assignment, before
+  importing.
+- Second row is `Points Possible` (Canvas's own required row), holding the
+  shared `pointsPossible` value (Section 4).
+- One row per parsed student **regardless of review status** — a student
+  not yet graded just gets a blank score cell, so re-exporting later after
+  finishing review doesn't require starting over. A blank score cell leaves
+  that student's Canvas grade untouched on import rather than zeroing it.
 - Output: a downloadable CSV, ready to re-upload via Canvas's
   Grades → Import.
 
@@ -358,7 +381,8 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   production build (`npm run build`) is static files with no backend/compute
   (Section 2's constraint), but must be hosted (e.g. GitHub Pages) rather
   than opened via a local `file://` URL — see Section 2 for why.
-- **PapaParse** — CSV parsing (survey export and gradebook template)
+- **PapaParse** — parses the survey CSV on import and builds the gradebook
+  CSV on export
 - **Pyodide** — runs `text2qti` client-side for QTI generation
 - **JSZip** — only needed if any additional client-side zipping is required
   outside of what `text2qti`/Pyodide already produces
@@ -427,8 +451,21 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
    edited during review and 2 rejected, confirming only accepted ones made
    it through), imported it into Quercus, and previewed the quiz
    successfully.
-7. Gradebook CSV merge/export (needs a real gradebook CSV sample to finalize
-   column handling)
+7. ~~Gradebook CSV export~~ **Done, real-browser-verified** — see Section 7
+   and [`src/gradebook/buildGradebookCsv.js`](src/gradebook/buildGradebookCsv.js)
+   (pure, fully unit-tested). Built from a real one-column gradebook export
+   the TA supplied, so no uploaded template is needed — every student
+   already parsed (Section 4) gets a row, blank-scored if not yet graded.
+   **Verified**: edited a downloaded export with real student information
+   and uploaded it into a live course; Canvas matched existing roster
+   students correctly and offered to skip ones not in the course. The score
+   column's header started out as the quiz title, but that's wrong — this
+   grade belongs to the graded survey assignment that already exists in the
+   course (Section 1), not to the new quiz the QTI package builds, and the
+   survey-submission CSV this app parses doesn't carry that existing
+   assignment's name or Canvas ID anywhere in it. So it's now a `FIXME`
+   placeholder the TA replaces by hand with the real header cell, copy-pasted
+   from a Canvas gradebook export of that survey assignment.
 
 ## 11. Open items still to resolve once real files are available
 
@@ -451,8 +488,6 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
     fabricated stand-in export for parser development/testing — see
     `fixtures/fabricated-survey-export.csv` and its test coverage in
     `src/csv/__tests__/`.
-- Exact column layout of a real Canvas gradebook export CSV, to finalize the
-  merge logic in Section 7
 - Whether per-question point values (vs. a fixed value) are needed — revisit
   after initial use
 
@@ -619,3 +654,26 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   out — this environment can't run real Pyodide/WASM against the real CDN.
   Real-browser-verified: exported, imported into Quercus, and previewed
   successfully with a mix of edited-and-accepted and rejected questions.
+- 2026-07-16 — Built gradebook CSV export (Section 7, step 10.7):
+  `src/gradebook/buildGradebookCsv.js` (pure, fully unit-tested), wired into
+  a second "Download gradebook CSV" button on the Export screen. Scope
+  changed from Section 7's original plan (merge into a TA-uploaded gradebook
+  template) after seeing a real one-column export from Quercus: every column
+  Canvas matches rows on is already available per student from parsing
+  (Section 4), so the CSV is built from scratch instead — no upload step
+  needed. Includes every parsed student regardless of review status (blank
+  score cell if not yet graded, so Canvas leaves that student's grade
+  untouched on import rather than zeroing it). Real-browser-verified: edited
+  a downloaded export with real student information and uploaded it into a
+  live Canvas course, which matched roster students correctly and offered to
+  skip ones not in the course. That test surfaced a mistake in the score
+  column's header: it started out as the quiz title, but that's wrong —
+  this grade belongs to the graded survey assignment that already exists in
+  the course and produced the CSV this app parses in the first place
+  (Section 1/4), not to the new quiz the QTI package (Section 6) builds from
+  accepted questions, and those are unrelated. The survey-submission CSV
+  doesn't carry that existing assignment's name or Canvas ID anywhere in it,
+  so there's nothing to build an exact, Canvas-matching header from here.
+  Changed to a `FIXME` placeholder the TA replaces by hand with the real
+  header cell, copy-pasted from a Canvas gradebook export of that survey
+  assignment.

@@ -122,7 +122,7 @@ $effect(() => {
   {:else if questions === null}
     <Upload onParsed={handleParsed} />
   {:else if view === "export"}
-    <Export {questions} onBack={() => (view = "review")} />
+    <Export {questions} {pointsPossible} onBack={() => (view = "review")} />
   {:else}
     <div class="points-possible">
       <label>
