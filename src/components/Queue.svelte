@@ -46,8 +46,8 @@ const STATUSES = ["pending", "accepted", "rejected"];
 // One row per student (Planned rework item 6), each carrying every attempt
 // plus whichever one is currently selected -- the TA's explicit choice from
 // the dropdown below if there is one, else defaultAttempt. Every displayed
-// column (Bloom level/status/grade) and the expanded Detail view reflect
-// only this selected attempt, never the others.
+// column (edited/status/grade) and the expanded Detail view reflect only
+// this selected attempt, never the others.
 // otherAcceptedAttempts: accepted attempts other than the selected one --
 // only the selected attempt's grade reaches the gradebook CSV (Section 7),
 // so an accepted-but-not-selected attempt is a real trap: its grade is
@@ -129,15 +129,15 @@ function attemptLabel(attemptNumber, index, count) {
  * @returns {string}
  */
 function formatGrade(points) {
-  if (points === null) return "Not graded";
+  const pointsText = points === null ? "-" : `${points}`;
   return pointsPossible !== null
-    ? `${points} / ${pointsPossible}`
-    : `${points}`;
+    ? `${pointsText} / ${pointsPossible}`
+    : pointsText;
 }
 </script>
 
 <section>
-  <h2>Review queue</h2>
+  <h2 class="sr-only">Review queue</h2>
 
   <div class="filters">
     <label>
@@ -163,7 +163,9 @@ function formatGrade(points) {
           <th title="Whichever attempt is selected here is the one whose grade reaches the gradebook CSV.">
             Graded attempt
           </th>
-          <th>Bloom level</th>
+          <th title="Whether the final version is different from the student's originally submitted version.">
+            Edited
+          </th>
           <th title="Only accepted questions are exported into the final quiz.">
             QTI Status
           </th>
@@ -215,7 +217,15 @@ function formatGrade(points) {
                 {/if}
               {/if}
             </td>
-            <td>{row.selected.question.bloomLevel ?? "Unrecognized"}</td>
+            <td>
+              <span
+                class="badge {row.selected.review.wasEdited
+                  ? 'badge-info'
+                  : 'badge-pending'}"
+              >
+                {row.selected.review.wasEdited ? "Edited" : "Unedited"}
+              </span>
+            </td>
             <td>
               <span class="badge badge-{row.selected.review.status}">
                 {row.selected.review.status}

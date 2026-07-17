@@ -191,6 +191,7 @@ function handleDiscardClick() {
       <div class="field-col">
         <label for="detail-bloom-level">Bloom level:</label>
         <p class="original">Student submitted: {question.original.bloomLevel ?? "— not set —"}</p>
+        <p class="final-version">Final version:</p>
         <select id="detail-bloom-level" bind:value={bloomLevel}>
           <option value={null}>— not set —</option>
           {#each BLOOM_LEVELS as level (level)}
@@ -201,10 +202,11 @@ function handleDiscardClick() {
       <div class="field-col">
         <label for="detail-keywords">Keywords (comma-separated):</label>
         <p class="original">Student submitted: {question.original.keywords.join(", ")}</p>
-        <input id="detail-keywords" type="text" bind:value={keywordsText} />
         {#if !isKeywordCountExpected(keywords)}
           <p class="warning">{keywords.length} keyword(s), expected 2-4</p>
         {/if}
+        <p class="final-version">Final version:</p>
+        <input id="detail-keywords" type="text" bind:value={keywordsText} />
       </div>
     </div>
 
@@ -213,10 +215,11 @@ function handleDiscardClick() {
       Student submitted ({wordCount(question.original.stem)} words):<br />
       {question.original.stem}
     </p>
-    <textarea id="detail-stem" bind:value={stem}></textarea>
     {#if wordCount(stem) > WORD_LIMITS.stem}
       <p class="warning">{wordCount(stem)} words, limit {WORD_LIMITS.stem}</p>
     {/if}
+    <p class="final-version">Final version ({wordCount(stem)} words):</p>
+    <textarea id="detail-stem" bind:value={stem}></textarea>
 
     {#if question.original.correctAnswer === null}
       <p class="original">Student submitted correct answer: — none —</p>
@@ -252,15 +255,15 @@ function handleDiscardClick() {
                 <br />
                 {question.original.responses[letter]}
               </p>
-              <label>
-                Final version:
-                <textarea bind:value={responses[letter]}></textarea>
-              </label>
               {#if wordCount(responses[letter]) > WORD_LIMITS.response}
                 <p class="warning">
                   {wordCount(responses[letter])} words, limit {WORD_LIMITS.response}
                 </p>
               {/if}
+              <label>
+                Final version ({wordCount(responses[letter])} words):
+                <textarea bind:value={responses[letter]}></textarea>
+              </label>
             </td>
             <td>
               <p class="original">
@@ -268,15 +271,15 @@ function handleDiscardClick() {
                 <br />
                 {question.original.feedback[letter]}
               </p>
-              <label>
-                Final version:
-                <textarea bind:value={feedback[letter]}></textarea>
-              </label>
               {#if wordCount(feedback[letter]) > WORD_LIMITS.feedback}
                 <p class="warning">
                   {wordCount(feedback[letter])} words, limit {WORD_LIMITS.feedback}
                 </p>
               {/if}
+              <label>
+                Final version ({wordCount(feedback[letter])} words):
+                <textarea bind:value={feedback[letter]}></textarea>
+              </label>
             </td>
           </tr>
         {/each}
@@ -423,14 +426,28 @@ function handleDiscardClick() {
     max-width: none;
   }
   .warning {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block: var(--space-1) var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    border-radius: var(--radius-sm);
     color: var(--color-warning);
-    font-size: var(--font-size-sm);
-    margin-block: var(--space-1) 0;
+    font-weight: 600;
+  }
+  .warning::before {
+    content: "⚠";
   }
   .original {
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
     margin-block: 0 var(--space-2);
+  }
+  .final-version {
+    font-weight: 500;
+    margin-block-end: var(--space-1);
   }
   .nav {
     display: flex;

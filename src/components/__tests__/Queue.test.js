@@ -20,6 +20,7 @@ function makeQuestion({
   bloomLevel,
   status,
   points,
+  wasEdited = false,
 }) {
   const content = {
     stem: `Stem for ${sisLoginId}:${attempt}`,
@@ -34,7 +35,7 @@ function makeQuestion({
     submission: { student: { name, sisLoginId }, attempt },
     question: { ...content },
     original: { ...content },
-    review: { status, grade: { points }, wasEdited: false },
+    review: { status, grade: { points }, wasEdited },
   };
 }
 
@@ -85,16 +86,34 @@ describe("Queue", () => {
     expect(screen.getByText("4 of 4 student(s) shown.")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(5); // header + 4 data rows
 
-    expect(screen.getAllByText("Not graded")).toHaveLength(2); // Alice and David share this
+    expect(screen.getAllByText("-")).toHaveLength(2); // Alice and David share this
     expect(screen.getByText("4")).toBeInTheDocument(); // Bob: points only, no shared pointsPossible
     expect(screen.getByText("2")).toBeInTheDocument(); // Carol: points only
-    expect(screen.getByText("Unrecognized")).toBeInTheDocument(); // David's null bloomLevel
+    expect(screen.getAllByText("Unedited")).toHaveLength(4); // none of the sample questions were edited
+  });
+
+  it("shows an Edited badge only for questions the TA has actually changed", () => {
+    renderQueue([
+      ...SAMPLE_QUESTIONS,
+      makeQuestion({
+        sisLoginId: "s5",
+        name: "Erin Evans",
+        status: "pending",
+        points: null,
+        wasEdited: true,
+      }),
+    ]);
+
+    expect(screen.getAllByText("Unedited")).toHaveLength(4);
+    expect(
+      screen.getByText("Edited", { selector: "span" }),
+    ).toBeInTheDocument();
   });
 
   it("formats grades against the shared pointsPossible value when it's set", () => {
     renderQueue(SAMPLE_QUESTIONS, 5);
 
-    expect(screen.getAllByText("Not graded")).toHaveLength(2);
+    expect(screen.getAllByText("- / 5")).toHaveLength(2);
     expect(screen.getByText("4 / 5")).toBeInTheDocument(); // Bob
     expect(screen.getByText("2 / 5")).toBeInTheDocument(); // Carol
   });

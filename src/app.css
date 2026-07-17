@@ -296,6 +296,12 @@ table {
   color: var(--color-warning);
 }
 
+.badge-info {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 /* Card: a section with real visual structure (surface, border, shadow) in
    place of a bare default-rendered border. Works on any container. A
    <fieldset class="card"> keeps its <legend> for accessibility (it still
