@@ -178,7 +178,7 @@ $effect(() => {
 </script>
 
 <main>
-  <h1>Canvas Question Review</h1>
+  <h1>Survey to QTI</h1>
 
   {#if autosaveFailed}
     <p class="alert alert-warning autosave-warning" role="status">
