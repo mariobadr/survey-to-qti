@@ -18,8 +18,10 @@ let readError = $state(null);
 // Structurally invalid rows mean the file's shape doesn't match what a
 // Canvas survey export looks like at all (wrong file, or a corrupted
 // export) -- there's no safe way to guess column meaning from a row that
-// doesn't have the expected number of columns, so this blocks continuing
-// rather than being a soft warning like the others (Section 5).
+// doesn't have the expected number of columns, so parseSurveyCsv imports
+// nothing at all in that case (blocking here is redundant with that, but
+// kept explicit for clarity) rather than being a soft warning like the
+// others (Section 5).
 let canContinue = $derived(
   result !== null &&
     result.summary.structurallyInvalidRows.length === 0 &&
@@ -66,6 +68,8 @@ function handleContinue() {
  */
 function describeWarning(warning) {
   switch (warning.type) {
+    case "missingFields":
+      return `Row ${warning.rowNumber} (${warning.name || "unknown student"}): missing ${warning.missingFields.join(", ")} -- included, but grade/edit accordingly`;
     case "unexpectedBloomLevel":
       return `Row ${warning.rowNumber} (${warning.sisLoginId}): unrecognized Bloom level "${warning.value}"`;
     case "unexpectedCorrectAnswer":
@@ -108,9 +112,9 @@ function describeWarning(warning) {
       {#if result.summary.structurallyInvalidRows.length > 0}
         <p class="error">
           {result.summary.structurallyInvalidRows.length} row(s) don't match the
-          expected column layout and can't be read at all. This usually means the
-          wrong file was selected, or the export is corrupted -- re-export the
-          survey from Canvas and try again.
+          expected column layout, so nothing in this file was imported. This
+          usually means the wrong file was selected, or the export is
+          corrupted -- re-export the survey from Canvas and try again.
         </p>
         <ul class="error-list">
           {#each result.summary.structurallyInvalidRows as row (row.rowNumber)}
@@ -121,16 +125,14 @@ function describeWarning(warning) {
         </ul>
       {/if}
 
-      {#if result.summary.incompleteRows.length > 0}
+      {#if result.summary.emptyRows.length > 0}
         <p class="warning">
-          {result.summary.incompleteRows.length} row(s) are missing required fields
-          and were excluded from review:
+          {result.summary.emptyRows.length} row(s) had no answers at all and
+          were excluded from review:
         </p>
         <ul class="warning-list">
-          {#each result.summary.incompleteRows as row (row.rowNumber)}
-            <li>
-              Row {row.rowNumber} ({row.name || "unknown student"}): missing {row.missingFields.join(", ")}
-            </li>
+          {#each result.summary.emptyRows as row (row.rowNumber)}
+            <li>Row {row.rowNumber} ({row.name || "unknown student"})</li>
           {/each}
         </ul>
       {/if}

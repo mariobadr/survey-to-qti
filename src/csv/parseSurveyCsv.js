@@ -129,9 +129,12 @@ function buildQuestion(metadata, answers) {
 }
 
 /**
- * Collect non-blocking warnings for one complete row: unrecognized Bloom
- * level or correct-answer text, an unexpected keyword count, and any
- * over-word-limit stem/response/feedback fields.
+ * Collect non-blocking warnings for one row: unrecognized Bloom level or
+ * correct-answer text, an unexpected keyword count, and any over-word-limit
+ * stem/response/feedback fields. Fields that are simply missing (empty)
+ * are skipped here -- those are already reported once via a "missingFields"
+ * warning (see parseSurveyCsv below), so an empty bloomLevelRaw doesn't
+ * also produce a confusing "unrecognized Bloom taxonomy ''" warning.
  *
  * @param {number} rowNumber - 1-based data-row number, for reporting.
  * @param {Record<string, string>} metadata - Metadata, as returned by extractRow.
@@ -142,7 +145,10 @@ function buildQuestion(metadata, answers) {
 function collectWarnings(rowNumber, metadata, answers, keywords) {
   const warnings = [];
 
-  if (normalizeBloomLevel(answers.bloomLevelRaw) === null) {
+  if (
+    answers.bloomLevelRaw.length > 0 &&
+    normalizeBloomLevel(answers.bloomLevelRaw) === null
+  ) {
     warnings.push({
       type: "unexpectedBloomLevel",
       rowNumber,
@@ -151,7 +157,10 @@ function collectWarnings(rowNumber, metadata, answers, keywords) {
     });
   }
 
-  if (normalizeCorrectAnswer(answers.correctAnswerRaw) === null) {
+  if (
+    answers.correctAnswerRaw.length > 0 &&
+    normalizeCorrectAnswer(answers.correctAnswerRaw) === null
+  ) {
     warnings.push({
       type: "unexpectedCorrectAnswer",
       rowNumber,
@@ -160,7 +169,7 @@ function collectWarnings(rowNumber, metadata, answers, keywords) {
     });
   }
 
-  if (!isKeywordCountExpected(keywords)) {
+  if (answers.keywordsRaw.length > 0 && !isKeywordCountExpected(keywords)) {
     warnings.push({
       type: "unexpectedKeywordCount",
       rowNumber,
@@ -214,43 +223,84 @@ function collectWarnings(rowNumber, metadata, answers, keywords) {
  * Columns are mapped positionally (see columnLayout.js) rather than by
  * header text, since Canvas's header text is inconsistent between exports.
  *
+ * Only two things ever keep a row's content out of the TA's hands entirely:
+ * a malformed column layout (there's no safe way to guess column meaning,
+ * so nothing in the file is imported -- see below) and a row with literally
+ * no answers at all (nothing to review). Anything short of that -- missing
+ * one or more of the 12 answer fields, an unrecognized Bloom
+ * level/correct-answer value, a bad keyword count, an over-word-limit field
+ * -- is a warning the TA can act on during review (edit the field in, or
+ * just grade accordingly), never a silent or forced exclusion.
+ *
  * @param {string} csvText - Raw CSV file contents, header row included.
  * @returns {{ questions: object[], summary: object }} `questions` are the
  *   valid, deduped Question objects; `summary` reports total rows parsed,
- *   the valid question count, structurally invalid rows, incomplete rows,
- *   and non-blocking warnings (see PROJECT_SPEC.md Section 4/5).
+ *   the valid question count, structurally invalid rows, empty rows, and
+ *   non-blocking warnings (see PROJECT_SPEC.md Section 4/5).
  */
 export function parseSurveyCsv(csvText) {
   const parsed = Papa.parse(csvText, { skipEmptyLines: true });
   const [, ...dataRows] = parsed.data; // first row is the header, discard it
 
-  const structurallyInvalidRows = [];
-  const incompleteRows = [];
+  const structurallyInvalidRows = dataRows.reduce((acc, row, i) => {
+    if (row.length !== EXPECTED_COLUMN_COUNT) {
+      acc.push({
+        rowNumber: i + 1,
+        columnCount: row.length,
+        expectedColumnCount: EXPECTED_COLUMN_COUNT,
+      });
+    }
+    return acc;
+  }, []);
+
+  // A malformed column layout means the file's shape doesn't match a
+  // Canvas survey export at all (wrong file selected, or a corrupted
+  // export) -- there's no safe way to guess column meaning anywhere in a
+  // file like that, so nothing is imported, rather than trying to salvage
+  // whichever rows happen to still have the right column count.
+  if (structurallyInvalidRows.length > 0) {
+    return {
+      questions: [],
+      summary: {
+        totalRowsParsed: dataRows.length,
+        validQuestionCount: 0,
+        structurallyInvalidRows,
+        emptyRows: [],
+        warnings: [],
+      },
+    };
+  }
+
+  const emptyRows = [];
   const warnings = [];
-  const candidates = []; // complete rows, keyed for dedup below
+  const candidates = []; // rows with at least one answer, keyed for dedup below
 
   dataRows.forEach((row, i) => {
     const rowNumber = i + 1;
+    const { metadata, answers } = extractRow(row);
+    const missingFields = missingAnswerFields(answers);
 
-    if (row.length !== EXPECTED_COLUMN_COUNT) {
-      structurallyInvalidRows.push({
+    // Every one of the 12 answer fields is blank -- nothing was submitted
+    // for this question at all, so there's nothing here to review, edit,
+    // or grade. Excluded, but doesn't block continuing (unlike a
+    // structurally invalid row above).
+    if (missingFields.length === QUESTION_ANSWER_FIELDS.length) {
+      emptyRows.push({
         rowNumber,
-        columnCount: row.length,
-        expectedColumnCount: EXPECTED_COLUMN_COUNT,
+        sisLoginId: metadata.sisLoginId,
+        name: metadata.name,
       });
       return;
     }
 
-    const { metadata, answers } = extractRow(row);
-    const missingFields = missingAnswerFields(answers);
     if (missingFields.length > 0) {
-      incompleteRows.push({
+      warnings.push({
+        type: "missingFields",
         rowNumber,
         sisLoginId: metadata.sisLoginId,
         name: metadata.name,
         missingFields,
       });
-      return;
     }
 
     const keywords = parseKeywords(answers.keywordsRaw);
@@ -293,7 +343,7 @@ export function parseSurveyCsv(csvText) {
       totalRowsParsed: dataRows.length,
       validQuestionCount: questions.length,
       structurallyInvalidRows,
-      incompleteRows,
+      emptyRows,
       warnings,
     },
   };

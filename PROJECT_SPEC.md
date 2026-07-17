@@ -137,17 +137,26 @@ unconfirmed):
   `1.0` and is ignored. Then 3 trailing columns: `n correct, n incorrect,
   score` (also ignored; these describe the survey's own auto-grading, not
   the question being reviewed).
-- **Structurally unparseable rows** (wrong column count) are excluded
-  entirely and reported in the upload summary — this is the only case that
-  should ever silently drop a row's worth of data, since there's nothing
-  sensible to map it to.
-- **Incomplete rows**: all 12 question-answer fields must be non-empty for a
-  row to become a question. Rows failing this are excluded from `questions`
-  but reported by row number and student in the parse summary — never
-  silently dropped or guessed at, since it's unknown what an incomplete
-  Canvas survey submission actually means (see Section 11).
+- **Structurally invalid rows** (wrong column count) are catastrophic — if
+  even one row in the file doesn't have the expected column count, **nothing
+  in the file is imported**, not just that one row. There's no safe way to
+  guess column meaning anywhere in a file whose shape doesn't match a Canvas
+  export at all (wrong file selected, or a corrupted export), so the whole
+  file is treated as untrustworthy rather than salvaging whichever rows
+  happen to still have the right column count. Reported in the upload
+  summary as `structurallyInvalidRows`.
+- **Missing fields are a warning, not an exclusion.** A row missing one or
+  more (but not all) of the 12 question-answer fields still becomes a
+  question — the TA can edit the field in during review, or just grade
+  accordingly; there's no reason to force that decision at parse time.
+  Reported as a `missingFields` warning (row number, student, which fields).
+  The only content-based exclusion left is a **completely empty row** — all
+  12 question-answer fields blank, meaning nothing was submitted for this
+  question at all, so there's nothing to review, edit, or grade. Reported
+  separately as `emptyRows`, non-blocking (unlike a structurally invalid
+  row).
 - **Duplicate attempts**: rows are grouped by `sisLoginId`; if a student has
-  more than one complete, structurally-valid row, only the one with the
+  more than one structurally-valid, non-empty row, only the one with the
   minimum `attempt` value is kept. Every drop is logged in the parse summary
   (`type: "duplicateAttemptDropped"`), never silent.
 - `bloomLevel` and `correctAnswer` normalization are each isolated in a
@@ -174,15 +183,17 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 ## 5. Screens
 
 1. **Upload** — file picker for the CSV. Parse and show: total rows parsed,
-   any rows with missing required fields, any word-count violations. Do not
-   block on warnings; block only on structurally unparseable rows.
-   Implementation note: "block" means disabling the "Continue to review
-   queue" action, not rejecting the file outright — the parse summary is
-   always shown either way. Blocks when there are any structurally invalid
-   rows (the file's shape doesn't match a Canvas export at all, so nothing
-   can be safely mapped) or when zero valid questions resulted (nothing to
-   review). Incomplete rows, word-count violations, and the other warning
-   types never block.
+   any rows missing some fields (included anyway, not excluded), any
+   completely empty rows (excluded — nothing to review), any word-count
+   violations. Do not block on warnings; block only on structurally invalid
+   rows. Implementation note: "block" means disabling the "Continue to
+   review queue" action, not rejecting the file outright — the parse
+   summary is always shown either way. Blocks when there are any
+   structurally invalid rows (the file's shape doesn't match a Canvas
+   export at all, so nothing in the file is imported — see Section 4) or
+   when zero valid questions resulted (nothing to review). Missing-field
+   warnings, empty rows, word-count violations, and the other warning types
+   never block.
 2. **Question Review view** — table of all submissions: student, Bloom
    level, status, grade. Filterable by status (no Bloom-level filter — not
    useful in practice). The row-select button shows a +/- icon and expands
@@ -486,15 +497,15 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   - The correct-answer question's option text (assumed to be the literal
     letters `A`/`B`/`C`/`D`) is based on a different quiz in the same Canvas
     instance, not this survey.
-  - What an incomplete/partial Canvas submission looks like in the export is
-    unknown — the parser currently treats any row missing one or more of the
-    12 answer fields as incomplete and excludes it from review, but this is
+  - What a partial Canvas submission looks like in the export is unknown —
+    the parser includes any row missing one or more (but not all) of the 12
+    answer fields as a question with a warning (Section 4), but this is
     untested against a real partial submission.
   - **TODO:** once a real submission to this survey exists, re-run the
     actual Canvas export through `parseSurveyCsv` and manually spot-check
     the result (especially `bloomLevel`/`correctAnswer` normalization and
-    the incomplete-row handling above) before trusting it for actual
-    grading. Until then, `tools/generate_fixture_csv.py` produces a
+    the missing-field/empty-row handling above) before trusting it for
+    actual grading. Until then, `tools/generate_fixture_csv.py` produces a
     fabricated stand-in export for parser development/testing — see
     `fixtures/fabricated-survey-export.csv` and its test coverage in
     `src/csv/__tests__/`.
@@ -696,3 +707,23 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   render plain row arrays instead of re-parsing CSV text), so a preview can
   never drift from what a download would actually contain, and both update
   live as the quiz title or `pointsPossible` change.
+- 2026-07-16 — Loosened `parseSurveyCsv`'s row-exclusion rules (Section 4):
+  a row missing one or more (but not all) of the 12 question-answer fields
+  is no longer excluded — it's a normal question with a `missingFields`
+  warning, since a TA can just edit the field in or grade accordingly, and
+  forcing that decision at parse time served no purpose. The only
+  content-based exclusion left is a completely empty row (all 12 fields
+  blank, nothing to review at all), now reported separately as `emptyRows`.
+  Also tightened structurally-invalid handling: previously a bad-column-count
+  row was dropped but every other row in the file still got imported; now,
+  if even one row doesn't match the expected column count, **nothing in the
+  file is imported** — there's no way to trust the rest of a file whose
+  shape doesn't match a Canvas export at all. `collectWarnings` no longer
+  fires `unexpectedBloomLevel`/`unexpectedCorrectAnswer`/
+  `unexpectedKeywordCount` for a field that's simply missing (already
+  covered by `missingFields`), to avoid double-reporting the same gap.
+  Regenerated the fabricated fixture
+  (`tools/generate_fixture_csv.py`/`fixtures/fabricated-survey-export.csv`)
+  with a new completely-empty row (Grace Green) to cover the `emptyRows`
+  path, and updated its comment on the pre-existing missing-field row (Erin
+  Evans) to reflect that it's included, not excluded.

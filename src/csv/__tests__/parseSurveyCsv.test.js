@@ -23,24 +23,36 @@ function findQuestion(questions, sisLoginId) {
 describe("parseSurveyCsv against the fabricated fixture", () => {
   const result = parseSurveyCsv(fixtureCsv);
 
-  it("parses all 7 fabricated data rows", () => {
-    expect(result.summary.totalRowsParsed).toBe(7);
+  it("parses all 8 fabricated data rows", () => {
+    expect(result.summary.totalRowsParsed).toBe(8);
   });
 
   it("finds no structurally invalid rows", () => {
     expect(result.summary.structurallyInvalidRows).toEqual([]);
   });
 
-  it("flags the incomplete row (Erin Evans, blank feedback D) and excludes it from questions", () => {
-    expect(result.summary.incompleteRows).toHaveLength(1);
-    expect(result.summary.incompleteRows[0]).toMatchObject({
-      sisLoginId: "fab00005",
+  it("flags the row missing one field (Erin Evans, blank feedback D) as a warning, but still includes it", () => {
+    const warning = result.summary.warnings.find(
+      (w) => w.type === "missingFields" && w.sisLoginId === "fab00005",
+    );
+    expect(warning).toMatchObject({
       name: "Erin Evans",
       missingFields: ["feedbackD"],
     });
+
+    const erin = findQuestion(result.questions, "fab00005");
+    expect(erin.question.feedback.D).toBe("");
+  });
+
+  it("excludes a completely empty row (Grace Green, no answers at all) from questions", () => {
+    expect(result.summary.emptyRows).toHaveLength(1);
+    expect(result.summary.emptyRows[0]).toMatchObject({
+      sisLoginId: "fab00007",
+      name: "Grace Green",
+    });
     expect(
       result.questions.some(
-        (q) => q.submission.student.sisLoginId === "fab00005",
+        (q) => q.submission.student.sisLoginId === "fab00007",
       ),
     ).toBe(false);
   });
@@ -89,9 +101,9 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
     expect(warning.actual).toBeGreaterThan(warning.limit);
   });
 
-  it("produces exactly 5 valid questions after dropping the incomplete row and deduping attempts", () => {
-    expect(result.questions).toHaveLength(5);
-    expect(result.summary.validQuestionCount).toBe(5);
+  it("produces exactly 6 valid questions after dropping the empty row and deduping attempts", () => {
+    expect(result.questions).toHaveLength(6);
+    expect(result.summary.validQuestionCount).toBe(6);
   });
 
   it("builds a well-formed Question object for a clean row", () => {
@@ -141,13 +153,17 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
 });
 
 describe("parseSurveyCsv structural validation", () => {
-  it("flags a row with the wrong column count as structurally invalid, and excludes it entirely", () => {
+  it("flags a row with the wrong column count as structurally invalid, and imports nothing at all", () => {
     const header = Array.from(
       { length: EXPECTED_COLUMN_COUNT },
       (_, i) => `col${i}`,
     ).join(",");
     const truncatedRow = METADATA_FIELDS.map((f) => `bad-${f}`).join(","); // way too few columns
-    const csv = `${header}\n${truncatedRow}\n`;
+    const validLookingRow = Array.from(
+      { length: EXPECTED_COLUMN_COUNT },
+      (_, i) => `val${i}`,
+    ).join(",");
+    const csv = `${header}\n${truncatedRow}\n${validLookingRow}\n`;
 
     const result = parseSurveyCsv(csv);
 
@@ -157,7 +173,11 @@ describe("parseSurveyCsv structural validation", () => {
       columnCount: METADATA_FIELDS.length,
       expectedColumnCount: EXPECTED_COLUMN_COUNT,
     });
+    // Even the second, correctly-shaped row isn't imported -- a malformed
+    // column layout anywhere in the file means nothing in it is trusted.
     expect(result.questions).toEqual([]);
-    expect(result.summary.incompleteRows).toEqual([]);
+    expect(result.summary.validQuestionCount).toBe(0);
+    expect(result.summary.emptyRows).toEqual([]);
+    expect(result.summary.warnings).toEqual([]);
   });
 });

@@ -232,8 +232,10 @@ FABRICATED_ROWS = [
         feedback_d="Too fast; that's not achievable for sorting.",
         correct_answer="C",
     ),
-    # Messy: incomplete row (Erin Evans) -- feedback for D is blank. Should
-    # be flagged and excluded from the valid question set, not guessed at.
+    # Messy: missing one field (Erin Evans, feedback for D is blank).
+    # Should be flagged as a warning and still show up in the valid
+    # question set -- a TA can edit the field in or just grade it down,
+    # so this is not grounds for exclusion.
     student_row(
         name="Erin Evans",
         canvas_id="100005",
@@ -253,8 +255,34 @@ FABRICATED_ROWS = [
         response_c="Code churn",
         feedback_c="That measures how often code changes.",
         response_d="Test velocity",
-        feedback_d="",  # missing -- makes this row incomplete
+        feedback_d="",  # missing -- flagged as a warning, not excluded
         correct_answer="B",
+    ),
+    # Messy: completely empty row (Grace Green) -- every one of the 12
+    # answer fields is blank, so there's nothing here to review at all.
+    # This is the one case (besides a structurally invalid file) that's
+    # still excluded from the valid question set.
+    student_row(
+        name="Grace Green",
+        canvas_id="100007",
+        sis_id="fab00007",
+        section="LEC0101",
+        section_id="200001",
+        section_sis_id="CSC101-F-LEC0101-20269",
+        submitted="2026-05-31 04:30:00 UTC",
+        attempt=1,
+        bloom_level="",
+        keywords="",
+        stem="",
+        response_a="",
+        feedback_a="",
+        response_b="",
+        feedback_b="",
+        response_c="",
+        feedback_c="",
+        response_d="",
+        feedback_d="",
+        correct_answer="",
     ),
     # Messy: stem exceeds the 50-word limit. Complete and structurally
     # valid -- should be a warning, not a rejection.

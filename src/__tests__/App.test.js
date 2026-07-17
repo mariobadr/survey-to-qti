@@ -100,7 +100,7 @@ describe("App: autosave", () => {
         type: "text/csv",
       }),
     );
-    await waitFor(() => screen.getByText(/5 valid questions ready for review/));
+    await waitFor(() => screen.getByText(/6 valid questions ready for review/));
     await userEvent.click(
       screen.getByRole("button", { name: /continue to review queue/i }),
     );
@@ -110,7 +110,7 @@ describe("App: autosave", () => {
     const raw = localStorage.getItem("survey-to-qti:session");
     expect(raw).not.toBeNull();
     const saved = JSON.parse(raw);
-    expect(saved.questions).toHaveLength(5);
+    expect(saved.questions).toHaveLength(6);
   });
 
   it("shows an unobtrusive warning when autosave fails, and clears it once autosave succeeds again", async () => {
