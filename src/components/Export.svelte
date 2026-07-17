@@ -101,16 +101,18 @@ async function handleDownload() {
 </script>
 
 <section>
-  <h2>Export</h2>
-  <button type="button" onclick={onBack}>Back to review</button>
+  <div class="export-header">
+    <h2>Export</h2>
+    <button type="button" onclick={onBack}>Back to review</button>
+  </div>
 
-  <ul>
-    <li>{accepted.length} accepted</li>
-    <li>{rejected.length} rejected</li>
-    <li>{pending.length} pending</li>
+  <ul class="summary">
+    <li><span class="badge badge-accepted">{accepted.length} accepted</span></li>
+    <li><span class="badge badge-rejected">{rejected.length} rejected</span></li>
+    <li><span class="badge badge-pending">{pending.length} pending</span></li>
   </ul>
 
-  <section class="export-block">
+  <section class="export-block card">
     <h3>QTI package</h3>
 
     <label>
@@ -121,6 +123,7 @@ async function handleDownload() {
     <div class="nav">
       <button
         type="button"
+        class="primary"
         disabled={accepted.length === 0 || status === "loading"}
         onclick={handleDownload}
       >
@@ -129,22 +132,22 @@ async function handleDownload() {
     </div>
 
     {#if accepted.length === 0}
-      <p class="warning">No accepted questions yet -- nothing to export.</p>
+      <p class="alert alert-warning">No accepted questions yet -- nothing to export.</p>
     {/if}
 
     {#if status === "loading"}
-      <p>
+      <p class="alert alert-warning">
         Generating the QTI package -- this can take a while the first time
         (loading a Python runtime in your browser).
       </p>
     {/if}
 
     {#if status === "error"}
-      <p class="error">Couldn't generate the QTI package: {errorMessage}</p>
+      <p class="alert alert-danger">Couldn't generate the QTI package: {errorMessage}</p>
     {/if}
 
     {#if status === "done"}
-      <p>Downloaded -- check your browser's downloads for the QTI zip file.</p>
+      <p class="alert alert-success">Downloaded -- check your browser's downloads for the QTI zip file.</p>
     {/if}
 
     <details>
@@ -153,17 +156,17 @@ async function handleDownload() {
     </details>
   </section>
 
-  <section class="export-block">
+  <section class="export-block card">
     <h3>Gradebook CSV</h3>
 
     <div class="nav">
-      <button type="button" onclick={handleDownloadGradebookCsv}>
+      <button type="button" class="primary" onclick={handleDownloadGradebookCsv}>
         Download gradebook CSV
       </button>
     </div>
 
     {#if gradebookDownloaded}
-      <p>Downloaded -- check your browser's downloads for the gradebook CSV.</p>
+      <p class="alert alert-success">Downloaded -- check your browser's downloads for the gradebook CSV.</p>
     {/if}
 
     <details>
@@ -193,48 +196,93 @@ async function handleDownload() {
 </section>
 
 <style>
-  .warning {
-    color: #8a6100;
+  section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
   }
-  .error {
-    color: #b00020;
+  .export-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-block-end: var(--space-4);
+  }
+  .export-header h2 {
+    margin: 0;
+  }
+  .summary {
+    display: flex;
+    gap: var(--space-3);
+    list-style: none;
+    margin: 0 0 var(--space-5);
+    padding: 0;
+  }
+  label {
+    display: block;
+    margin-block-end: var(--space-3);
+  }
+  label input[type="text"] {
+    display: block;
+    width: 100%;
+    max-width: 28rem;
+    margin-block-start: var(--space-1);
   }
   .nav {
-    margin-block: 1em;
+    margin-block: var(--space-4);
   }
   .export-block {
-    margin-block: 1.5em;
-    padding-block-start: 1em;
-    border-top: 1px solid #ccc;
+    margin-block: var(--space-5);
+    box-shadow: none;
+  }
+  .export-block h3 {
+    margin-block-end: var(--space-4);
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--color-primary);
+    font-weight: 500;
+    margin-block-start: var(--space-3);
   }
   .qti-preview {
     max-height: 20em;
     overflow: auto;
-    padding: 0.75em;
-    background: #f5f5f5;
-    border: 1px solid #ccc;
+    margin-block-start: var(--space-3);
+    padding: var(--space-3);
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
     white-space: pre-wrap;
     word-break: break-word;
   }
   .csv-preview-wrapper {
     max-height: 20em;
     overflow: auto;
-    border: 1px solid #ccc;
+    margin-block-start: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
   }
   .csv-preview-table {
     border-collapse: collapse;
     width: 100%;
+    font-size: var(--font-size-sm);
   }
   .csv-preview-table th,
   .csv-preview-table td {
-    border: 1px solid #ccc;
-    padding: 0.25em 0.5em;
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-2) var(--space-3);
     text-align: left;
     white-space: nowrap;
   }
   .csv-preview-table thead th {
     position: sticky;
     top: 0;
-    background: #f5f5f5;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 </style>

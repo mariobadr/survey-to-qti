@@ -96,29 +96,31 @@ function handleContinue() {
   <p>Select the Canvas survey CSV export to review.</p>
 
   {#if hasExistingQuestions}
-    <p class="warning">
+    <p class="alert alert-warning">
       Questions from an earlier upload are already loaded. Uploading a new
       file will replace them and discard any review progress.
     </p>
   {/if}
 
-  <input
-    type="file"
-    accept=".csv"
-    aria-label="Canvas survey CSV export"
-    onchange={handleFileChange}
-  />
+  <div class="upload-controls">
+    <input
+      type="file"
+      accept=".csv"
+      aria-label="Canvas survey CSV export"
+      onchange={handleFileChange}
+    />
 
-  <label>
-    Default attempt:
-    <select bind:value={defaultAttempt}>
-      <option value="first">First attempt</option>
-      <option value="latest">Latest attempt</option>
-    </select>
-  </label>
+    <label>
+      Default attempt:
+      <select bind:value={defaultAttempt}>
+        <option value="first">First attempt</option>
+        <option value="latest">Latest attempt</option>
+      </select>
+    </label>
+  </div>
 
   {#if readError}
-    <p class="error">Couldn't read "{fileName}": {readError}</p>
+    <p class="alert alert-danger">Couldn't read "{fileName}": {readError}</p>
   {/if}
 
   {#if result}
@@ -129,26 +131,35 @@ function handleContinue() {
         (Section 5), so listing them again at upload time would just be
         noise. Only what actually blocks continuing is shown. -->
       {#if result.summary.structurallyInvalidRows.length > 0}
-        <p class="error">
-          {result.summary.structurallyInvalidRows.length} row(s) don't match the
-          expected column layout, so nothing in this file was imported. This
-          usually means the wrong file was selected, or the export is
-          corrupted -- re-export the survey from Canvas and try again.
-        </p>
-        <ul class="error-list">
-          {#each result.summary.structurallyInvalidRows as row (row.rowNumber)}
-            <li>
-              Row {row.rowNumber}: found {row.columnCount} columns, expected {row.expectedColumnCount}
-            </li>
-          {/each}
-        </ul>
+        <div class="alert alert-danger">
+          <p>
+            {result.summary.structurallyInvalidRows.length} row(s) don't match the
+            expected column layout, so nothing in this file was imported. This
+            usually means the wrong file was selected, or the export is
+            corrupted -- re-export the survey from Canvas and try again.
+          </p>
+          <ul class="error-list">
+            {#each result.summary.structurallyInvalidRows as row (row.rowNumber)}
+              <li>
+                Row {row.rowNumber}: found {row.columnCount} columns, expected {row.expectedColumnCount}
+              </li>
+            {/each}
+          </ul>
+        </div>
       {/if}
 
-      <button type="button" disabled={!canContinue} onclick={handleContinue}>
-        Continue to review queue
-      </button>
+      <div class="nav">
+        <button
+          type="button"
+          class="primary"
+          disabled={!canContinue}
+          onclick={handleContinue}
+        >
+          Continue to review queue
+        </button>
+      </div>
       {#if result !== null && !canContinue}
-        <p class="error">
+        <p class="alert alert-danger">
           Fix the file and re-upload before continuing
           {result.questions.length === 0 ? " -- no valid questions were found." : "."}
         </p>
@@ -188,32 +199,53 @@ function handleContinue() {
 </section>
 
 <style>
-  input[type="file"] {
-    display: block;
-    margin-block-end: 0.75em;
+  section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
+  }
+  .upload-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    margin-block: var(--space-4);
   }
   label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
-  .error {
-    color: #b00020;
+  .alert {
+    margin-block-end: var(--space-4);
   }
-  .warning {
-    color: #8a6100;
+  .alert p {
+    margin: 0 0 var(--space-2);
   }
   .error-list {
-    font-size: 0.9em;
+    font-size: var(--font-size-sm);
+    margin: 0;
+  }
+  .nav {
+    margin-block: var(--space-4);
+  }
+  .result {
+    margin-block-start: var(--space-4);
+    padding-block-start: var(--space-4);
+    border-top: 1px solid var(--color-border);
   }
   .preview-wrapper {
     max-height: 20em;
     overflow: auto;
-    border: 1px solid #ccc;
-    margin-block-start: 1em;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    margin-block-start: var(--space-4);
   }
   .preview-truncated {
-    font-size: 0.9em;
-    color: #666;
-    margin-block-start: 0.3em;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-block-start: var(--space-2);
   }
   .preview-table {
     border-collapse: collapse;
@@ -221,8 +253,8 @@ function handleContinue() {
   }
   .preview-table th,
   .preview-table td {
-    border: 1px solid #ccc;
-    padding: 0.25em 0.5em;
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-2) var(--space-3);
     text-align: left;
   }
   .preview-table th:not(:last-child),
@@ -232,6 +264,10 @@ function handleContinue() {
   .preview-table thead th {
     position: sticky;
     top: 0;
-    background: #f5f5f5;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 </style>

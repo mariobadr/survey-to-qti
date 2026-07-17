@@ -181,7 +181,7 @@ $effect(() => {
   <h1>Canvas Question Review</h1>
 
   {#if autosaveFailed}
-    <p class="autosave-warning" role="status">
+    <p class="alert alert-warning autosave-warning" role="status">
       Autosave isn't working right now -- recent changes may not be saved.
       This can happen in private/incognito browsing, or if your browser's
       storage is full.
@@ -189,11 +189,13 @@ $effect(() => {
   {/if}
 
   {#if sessionChoice === "pending"}
-    <section>
+    <section class="card resume-card">
       <h2>Resume previous session?</h2>
       <p>Unsaved review progress was found from a previous session.</p>
-      <button type="button" onclick={handleResume}>Resume</button>
-      <button type="button" onclick={handleStartOver}>Start over</button>
+      <div class="nav">
+        <button type="button" class="primary" onclick={handleResume}>Resume</button>
+        <button type="button" onclick={handleStartOver}>Start over</button>
+      </div>
     </section>
   {:else}
     <nav class="tabs">
@@ -251,11 +253,11 @@ $effect(() => {
       </div>
 
       {#if pointsPossibleDraftInvalid}
-        <p class="error">Points possible can't be negative.</p>
+        <p class="alert alert-danger">Points possible can't be negative.</p>
       {/if}
 
       {#if gradeScaleNotice}
-        <p class="grade-scale-notice" role="status">{gradeScaleNotice}</p>
+        <p class="alert alert-success" role="status">{gradeScaleNotice}</p>
       {/if}
 
       <Queue
@@ -271,46 +273,75 @@ $effect(() => {
 </main>
 
 <style>
+  main {
+    max-width: 74rem;
+    margin-inline: auto;
+    padding: var(--space-6) var(--space-5);
+  }
   .tabs {
     display: flex;
-    gap: 0.5em;
-    margin-block-end: 1em;
-    border-bottom: 1px solid #ccc;
-    padding-block-end: 0.5em;
+    gap: var(--space-2);
+    margin-block-end: var(--space-5);
+    border-bottom: 1px solid var(--color-border);
   }
   .tabs button {
-    padding: 0.4em 0.9em;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none;
+    padding: var(--space-2) var(--space-1) var(--space-3);
+    margin-block-end: -1px;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+  .tabs button:hover:not(:disabled) {
+    background: none;
+    color: var(--color-text);
   }
   .tabs button.active {
-    font-weight: bold;
-    background: #e0e0e0;
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    font-weight: 600;
   }
   .points-possible {
     display: flex;
     align-items: center;
-    gap: 0.75em;
-    margin-block-end: 1em;
+    gap: var(--space-3);
+    margin-block-end: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
   }
-  .grade-scale-notice {
-    margin-block-end: 1em;
-    color: #0a5c36;
+  .points-possible label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 500;
   }
-  .error {
-    margin-block-end: 1em;
-    color: #b00020;
+  .points-possible input[type="number"] {
+    width: 5em;
+  }
+  .points-possible span {
+    color: var(--color-text-muted);
+  }
+  .alert {
+    margin-block-end: var(--space-4);
+  }
+  .resume-card {
+    max-width: 32rem;
+  }
+  .resume-card .nav {
+    display: flex;
+    gap: var(--space-2);
+    margin-block-start: var(--space-4);
   }
   .autosave-warning {
     position: fixed;
-    right: 1em;
-    bottom: 1em;
+    right: var(--space-5);
+    bottom: var(--space-5);
     max-width: 22em;
     margin: 0;
-    padding: 0.6em 0.9em;
-    background: #fff3cd;
-    color: #664d03;
-    border: 1px solid #ffe69c;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    font-size: 0.9em;
+    box-shadow: var(--shadow-card);
   }
 </style>

@@ -141,7 +141,7 @@ function formatGrade(points) {
 
   <div class="filters">
     <label>
-      Status:
+      QTI Status:
       <select bind:value={statusFilter}>
         <option value="all">All</option>
         {#each STATUSES as status (status)}
@@ -164,8 +164,12 @@ function formatGrade(points) {
             Graded attempt
           </th>
           <th>Bloom level</th>
-          <th>Status</th>
-          <th>Grade</th>
+          <th title="Only accepted questions are exported into the final quiz.">
+            QTI Status
+          </th>
+          <th title="The grade that will be exported to the gradebook CSV.">
+            Grade
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -178,9 +182,7 @@ function formatGrade(points) {
                 onclick={() => handleToggle(row.sisLoginId)}
                 aria-expanded={row.sisLoginId === expandedId}
               >
-                <span class="toggle-icon" aria-hidden="true">
-                  {row.sisLoginId === expandedId ? "-" : "+"}
-                </span>
+                <span class="toggle-icon" aria-hidden="true"></span>
                 {row.name}
               </button>
             </td>
@@ -205,7 +207,7 @@ function formatGrade(points) {
                 </select>
                 {#if row.otherAcceptedAttempts.length > 0}
                   <p class="attempt-warning">
-                    ⚠ attempt{row.otherAcceptedAttempts.length > 1 ? "s" : ""}
+                    Attempt{row.otherAcceptedAttempts.length > 1 ? "s" : ""}
                     {row.otherAcceptedAttempts
                       .map((a) => a.submission.attempt)
                       .join(", ")} accepted but not graded
@@ -214,12 +216,16 @@ function formatGrade(points) {
               {/if}
             </td>
             <td>{row.selected.question.bloomLevel ?? "Unrecognized"}</td>
-            <td>{row.selected.review.status}</td>
+            <td>
+              <span class="badge badge-{row.selected.review.status}">
+                {row.selected.review.status}
+              </span>
+            </td>
             <td>{formatGrade(row.selected.review.grade.points)}</td>
           </tr>
           {#if row.sisLoginId === expandedId}
             <tr>
-              <td colspan="5">
+              <td colspan="5" class="detail-cell">
                 {#key row.selected.id}
                   <Detail
                     question={row.selected}
@@ -238,6 +244,13 @@ function formatGrade(points) {
 </section>
 
 <style>
+  section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
+  }
   table {
     border-collapse: collapse;
     width: 100%;
@@ -245,36 +258,78 @@ function formatGrade(points) {
   th,
   td {
     text-align: left;
-    padding: 0.4em 0.8em;
-    border-bottom: 1px solid #ddd;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+  thead th {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+    border-bottom: 2px solid var(--color-border);
+  }
+  tbody tr:hover {
+    background: var(--color-surface-muted);
+  }
+  tr:has(+ tr .detail-cell) {
+    background: var(--color-primary-bg);
+  }
+  .detail-cell {
+    padding: var(--space-5);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
   }
   .row-select {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
+    gap: var(--space-2);
     background: none;
     border: none;
     padding: 0;
-    color: #1a5fb4;
-    text-decoration: underline;
+    color: var(--color-primary);
+    text-decoration: none;
     cursor: pointer;
     font: inherit;
+    font-weight: 500;
+  }
+  .row-select:hover,
+  .row-select:focus-visible {
+    background: none;
+    text-decoration: underline;
   }
   .toggle-icon {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 1em;
-    margin-right: 0.4em;
-    font-weight: bold;
-    text-decoration: none;
-    text-align: center;
+    height: 1em;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+  .toggle-icon::before {
+    content: "";
+    width: 0.5em;
+    height: 0.5em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+  }
+  .row-select[aria-expanded="true"] .toggle-icon::before {
+    transform: rotate(45deg);
+    margin-block-start: -0.15em;
   }
   .filters {
     display: flex;
-    gap: 1.5em;
-    margin-bottom: 1em;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
   }
   .attempt-warning {
-    margin: 0.3em 0 0;
-    color: #8a6100;
-    font-size: 0.85em;
+    margin: var(--space-2) 0 0;
+    color: var(--color-warning);
+    font-size: var(--font-size-sm);
   }
 </style>

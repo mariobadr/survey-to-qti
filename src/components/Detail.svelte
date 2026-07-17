@@ -169,14 +169,16 @@ function handleCloseClick() {
 </script>
 
 <section>
-  <h3>Review question — {question.submission.student.name}</h3>
-
   {#if isDirty}
-    <p class="dirty">Unsaved changes</p>
+    <p class="detail-header">
+      <span class="badge badge-warning">Unsaved changes</span>
+    </p>
   {/if}
 
-  <fieldset>
+  <fieldset class="card">
     <legend>Question</legend>
+    <div class="card-header" aria-hidden="true">Question</div>
+    <div class="card-body">
 
     <div class="field-row">
       <div class="field-col">
@@ -273,10 +275,13 @@ function handleCloseClick() {
         {/each}
       </tbody>
     </table>
+    </div>
   </fieldset>
 
-  <fieldset>
+  <fieldset class="card">
     <legend>Review</legend>
+    <div class="card-header" aria-hidden="true">Review</div>
+    <div class="card-body">
 
     <div class="field-row">
       <div class="field-col">
@@ -314,25 +319,37 @@ function handleCloseClick() {
         {/if}
       </div>
     </div>
+    </div>
   </fieldset>
 
   <div class="nav">
-    <button type="button" onclick={handleSaveClick}>Save</button>
+    <button type="button" class="primary" onclick={handleSaveClick}>Save</button>
     <button type="button" onclick={handleCloseClick}>Close</button>
   </div>
 </section>
 
 <style>
-  fieldset {
-    margin-block: 1em;
+  .detail-header {
+    margin: 0 0 var(--space-4);
+  }
+  fieldset.card + fieldset.card {
+    margin-block-start: var(--space-5);
   }
   fieldset h4 {
-    margin-block: 0.75em 0.25em;
+    margin-block: 0 var(--space-2);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-muted);
+  }
+  label {
+    display: block;
+    margin-block-end: var(--space-1);
   }
   .field-row {
     display: flex;
-    gap: 1.5em;
-    margin-block-end: 0.5em;
+    gap: var(--space-5);
+    margin-block-end: var(--space-4);
   }
   .field-col {
     flex: 1;
@@ -344,11 +361,23 @@ function handleCloseClick() {
   }
   .grade-row {
     display: flex;
-    align-items: baseline;
-    gap: 1em;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .grade-row label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
   }
   .grade-row input[type="number"] {
     width: 5em;
+  }
+  label:has(input[type="radio"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block-end: var(--space-2);
   }
   .responses-table {
     border-collapse: collapse;
@@ -359,8 +388,11 @@ function handleCloseClick() {
   .responses-table td {
     text-align: left;
     vertical-align: top;
-    padding: 0.4em 0.6em;
-    border-bottom: 1px solid #ddd;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .responses-table tbody tr:nth-child(even) {
+    background: var(--color-surface-muted);
   }
   .responses-table th:first-child,
   .responses-table td:first-child {
@@ -370,29 +402,32 @@ function handleCloseClick() {
   .responses-table td:not(:first-child) {
     width: 40%;
   }
+  .responses-table label {
+    font-weight: 500;
+    margin-block-end: var(--space-1);
+  }
   textarea {
     display: block;
     width: 100%;
     max-width: 40em;
+    min-height: 2.5em;
   }
   .responses-table textarea {
     max-width: none;
   }
-  .dirty {
-    color: #8a6100;
-    font-weight: bold;
-  }
   .warning {
-    color: #8a6100;
+    color: var(--color-warning);
+    font-size: var(--font-size-sm);
+    margin-block: var(--space-1) 0;
   }
   .original {
-    color: #666;
-    font-size: 0.9em;
-    margin-block: 0.15em 0.5em;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin-block: 0 var(--space-2);
   }
   .nav {
     display: flex;
-    gap: 0.5em;
-    margin-block-start: 1em;
+    gap: var(--space-2);
+    margin-block-start: var(--space-5);
   }
 </style>

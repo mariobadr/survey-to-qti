@@ -91,9 +91,6 @@ describe("Detail", () => {
   it("renders the question's current field values", () => {
     renderDetail();
 
-    expect(
-      screen.getByRole("heading", { name: /Alice Anderson/ }),
-    ).toBeInTheDocument();
     expect(screen.getByLabelText(/stem/i)).toHaveValue(
       "What is the base case of a recursive function?",
     );

@@ -1,0 +1,330 @@
+/*
+ * Design tokens. Small, deliberately limited set -- this is an internal
+ * review tool, so the goal is consistency and legibility, not a full brand
+ * system. Every color pairing below is chosen to clear WCAG AA contrast
+ * (4.5:1 for body text, 3:1 for large text/UI elements) against the surface
+ * it's used on.
+ */
+:root {
+  /* Color: neutrals */
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8f9fb;
+  --color-border: #d3d7dd;
+  --color-border-strong: #7d8590;
+  --color-text: #1b1f24;
+  --color-text-muted: #4b5563;
+
+  /* Color: accent */
+  --color-primary: #1a5fb4;
+  --color-primary-hover: #154a8f;
+  --color-primary-bg: #eaf1fb;
+
+  /* Color: status */
+  --color-success: #0a5c36;
+  --color-success-bg: #e6f4ea;
+  --color-success-border: #b7dfc4;
+  --color-warning: #7a5300;
+  --color-warning-bg: #fff3cd;
+  --color-warning-border: #ffe69c;
+  --color-danger: #b00020;
+  --color-danger-bg: #fdecea;
+  --color-danger-border: #f3c2c2;
+
+  /* Type */
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.375rem;
+  --font-size-2xl: 1.75rem;
+  --line-height-base: 1.5;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-card:
+    0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --focus-ring: 0 0 0 3px rgba(26, 95, 180, 0.35);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+h1 {
+  font-size: var(--font-size-2xl);
+  margin: 0 0 var(--space-5);
+}
+
+h2 {
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--space-3);
+}
+
+h3 {
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-3);
+}
+
+h4 {
+  font-size: var(--font-size-base);
+  margin: 0 0 var(--space-2);
+}
+
+p {
+  margin: 0 0 var(--space-3);
+}
+
+a {
+  color: var(--color-primary);
+}
+
+/* Form controls: one consistent look for every text input, select, and
+   textarea in the app, regardless of which component renders it. */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: var(--font-size-base);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="file"],
+select,
+textarea {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  line-height: var(--line-height-base);
+}
+
+textarea {
+  font-family: inherit;
+  resize: vertical;
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--color-primary);
+}
+
+input[type="text"]:focus-visible,
+input[type="number"]:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="checkbox"]:focus-visible,
+input[type="file"]:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--focus-ring);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+label {
+  font-weight: 500;
+}
+
+/* Buttons: a single default (secondary/neutral) look, plus a `.primary`
+   variant for the one main action per screen. Everything else -- Save,
+   Close, Back, filters -- stays neutral so the primary action still reads
+   as the primary action. */
+button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.1s ease,
+    border-color 0.1s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+}
+
+button.primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+table {
+  font-size: var(--font-size-base);
+}
+
+/* Alerts: section/page-level notices (autosave failures, blocking errors,
+   confirmations). Field-level inline warnings stay plain colored text --
+   boxing every word-count notice would hurt density -- these are for
+   messages that stand on their own. */
+.alert {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.alert-warning {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning);
+}
+
+.alert-success {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
+}
+
+.alert-danger {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+/* Status badges: compact, color-coded, for scanning a table of many rows
+   at a glance rather than reading each status cell's text. */
+.badge {
+  display: inline-block;
+  padding: 0.15em 0.65em;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-pending {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.badge-accepted {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
+}
+
+.badge-rejected {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.badge-warning {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning);
+}
+
+/* Card: a section with real visual structure (surface, border, shadow) in
+   place of a bare default-rendered border. Works on any container. A
+   <fieldset class="card"> keeps its <legend> for accessibility (it still
+   names the group for assistive tech) but the legend is visually hidden --
+   browsers lay out a <legend> straddling the fieldset's own border no
+   matter what CSS is applied to it, which always leaves a gap in that
+   border. The visible header bar is a plain .card-header div instead,
+   which isn't subject to any fieldset/legend-specific layout. */
+.card {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+fieldset.card {
+  padding: 0;
+}
+
+.card > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.card-header {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.card-body {
+  padding: var(--space-5);
+}
