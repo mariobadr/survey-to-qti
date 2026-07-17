@@ -17,10 +17,11 @@ afterEach(() => {
 
 function makeQuestion(id, status, points = null) {
   return {
-    id,
+    id: `${id}:1`,
     submission: {
       student: { name: `Student ${id}`, canvasId: id, sisLoginId: id },
       section: { name: "Section 1" },
+      attempt: 1,
     },
     question: {
       stem: `Stem ${id}`,
@@ -39,12 +40,18 @@ const SAMPLE_QUESTIONS = [
   makeQuestion("s4", "pending"),
 ];
 
+// Every Export test needs these two attempt-handling props (Planned rework
+// item 6) even though none of these fixtures have a student with more than
+// one attempt -- selectCanonicalQuestions (src/attempts.js) always runs.
+const ATTEMPT_PROPS = { attemptSelection: {}, defaultAttempt: "first" };
+
 describe("Export: summary counts", () => {
   it("shows accepted/rejected/pending counts", () => {
     render(Export, {
       props: {
         questions: SAMPLE_QUESTIONS,
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -57,7 +64,12 @@ describe("Export: summary counts", () => {
   it("calls onBack when 'Back to review' is clicked", async () => {
     const onBack = vi.fn();
     render(Export, {
-      props: { questions: SAMPLE_QUESTIONS, pointsPossible: 1, onBack },
+      props: {
+        questions: SAMPLE_QUESTIONS,
+        pointsPossible: 1,
+        ...ATTEMPT_PROPS,
+        onBack,
+      },
     });
 
     await userEvent.click(
@@ -77,6 +89,7 @@ describe("Export: with no accepted questions", () => {
           makeQuestion("s2", "pending"),
         ],
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -111,6 +124,7 @@ describe("Export: downloading", () => {
       props: {
         questions: SAMPLE_QUESTIONS,
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -136,6 +150,7 @@ describe("Export: downloading", () => {
       props: {
         questions: SAMPLE_QUESTIONS,
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -174,6 +189,7 @@ describe("Export: gradebook CSV download", () => {
       props: {
         questions: SAMPLE_QUESTIONS,
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -196,6 +212,7 @@ describe("Export: gradebook CSV download", () => {
       props: {
         questions: [makeQuestion("s1", "pending")],
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -212,6 +229,7 @@ describe("Export: previews", () => {
       props: {
         questions: SAMPLE_QUESTIONS,
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -234,6 +252,7 @@ describe("Export: previews", () => {
       props: {
         questions: SAMPLE_QUESTIONS,
         pointsPossible: 1,
+        ...ATTEMPT_PROPS,
         onBack: vi.fn(),
       },
     });
@@ -250,5 +269,63 @@ describe("Export: previews", () => {
     expect(table).toHaveTextContent("Student s1");
     expect(table).toHaveTextContent("Student s3");
     expect(table).toHaveTextContent("Student s4");
+  });
+});
+
+describe("Export: gradebook canonicalization across multiple attempts (Planned rework item 6)", () => {
+  // Erin (s5) has two attempts with different grades -- the gradebook CSV
+  // must contain exactly one row for her, using whichever attempt is
+  // selected/defaulted, never both.
+  const MULTI_ATTEMPT_QUESTIONS = [
+    { ...makeQuestion("s5", "accepted", 1), id: "s5:1" },
+    { ...makeQuestion("s5", "rejected", 0), id: "s5:2" },
+  ];
+  MULTI_ATTEMPT_QUESTIONS[0].submission.attempt = 1;
+  MULTI_ATTEMPT_QUESTIONS[1].submission.attempt = 2;
+
+  it("includes exactly one row per student, using the explicitly selected attempt", () => {
+    render(Export, {
+      props: {
+        questions: MULTI_ATTEMPT_QUESTIONS,
+        pointsPossible: 1,
+        attemptSelection: { s5: 2 },
+        defaultAttempt: "first",
+        onBack: vi.fn(),
+      },
+    });
+
+    const table = screen
+      .getByText(/preview gradebook csv/i)
+      .closest("details")
+      .querySelector("table");
+    const studentRows = [...table.querySelectorAll("tbody tr")].filter((r) =>
+      r.textContent.includes("Student s5"),
+    );
+
+    expect(studentRows).toHaveLength(1);
+    expect(studentRows[0]).toHaveTextContent("0.00"); // attempt 2's grade (rejected, 0), not attempt 1's (1)
+  });
+
+  it("falls back to defaultAttempt when the student has no explicit selection", () => {
+    render(Export, {
+      props: {
+        questions: MULTI_ATTEMPT_QUESTIONS,
+        pointsPossible: 1,
+        attemptSelection: {},
+        defaultAttempt: "latest",
+        onBack: vi.fn(),
+      },
+    });
+
+    const table = screen
+      .getByText(/preview gradebook csv/i)
+      .closest("details")
+      .querySelector("table");
+    const studentRows = [...table.querySelectorAll("tbody tr")].filter((r) =>
+      r.textContent.includes("Student s5"),
+    );
+
+    expect(studentRows).toHaveLength(1);
+    expect(studentRows[0]).toHaveTextContent("0.00"); // "latest" -> attempt 2
   });
 });

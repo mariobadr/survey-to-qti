@@ -49,13 +49,13 @@ describe("Upload", () => {
 
     await waitFor(() => screen.getByText(/8 total rows parsed/));
     expect(
-      screen.getByText(/6 valid questions ready for review/),
+      screen.getByText(/7 valid questions ready for review/),
     ).toBeInTheDocument();
     expect(screen.getByText(/Grace Green/)).toBeInTheDocument();
     expect(screen.getByText(/had no answers at all/)).toBeInTheDocument();
     expect(screen.getByText(/Erin Evans/)).toBeInTheDocument();
     expect(screen.getByText(/missing feedbackD/)).toBeInTheDocument();
-    expect(screen.getByText(/4 other warning\(s\)/)).toBeInTheDocument();
+    expect(screen.getByText(/3 other warning\(s\)/)).toBeInTheDocument();
 
     const continueButton = screen.getByRole("button", {
       name: /continue to review queue/i,
@@ -63,28 +63,34 @@ describe("Upload", () => {
     expect(continueButton).toBeEnabled();
   });
 
-  it("calls onParsed with the 6 deduped questions (empty row dropped) when Continue is clicked", async () => {
+  it("calls onParsed with all 7 questions (David Davis's two attempts both kept) and the chosen default attempt", async () => {
     const onParsed = await uploadFile(
       fixtureCsv,
       "fabricated-survey-export.csv",
     );
-    await waitFor(() => screen.getByText(/6 valid questions ready for review/));
+    await waitFor(() => screen.getByText(/7 valid questions ready for review/));
 
+    await userEvent.selectOptions(
+      screen.getByLabelText(/default attempt/i),
+      "latest",
+    );
     await userEvent.click(
       screen.getByRole("button", { name: /continue to review queue/i }),
     );
 
     expect(onParsed).toHaveBeenCalledTimes(1);
-    const questions = onParsed.mock.calls[0][0];
-    expect(questions).toHaveLength(6);
+    const [questions, defaultAttempt] = onParsed.mock.calls[0];
+    expect(questions).toHaveLength(7);
     expect(questions.map((q) => q.submission.student.name)).toEqual([
       "Alice Anderson",
       "Bob Brown",
       "Carol Chen",
       "David Davis",
+      "David Davis",
       "Erin Evans",
       "Frank Foster",
     ]);
+    expect(defaultAttempt).toBe("latest");
   });
 
   it("disables Continue and shows an error for a structurally invalid CSV", async () => {

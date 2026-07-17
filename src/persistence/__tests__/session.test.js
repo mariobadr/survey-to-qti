@@ -5,9 +5,11 @@ import { clearSession, loadSession, saveSession } from "../session.js";
 afterEach(() => localStorage.clear());
 
 const SAMPLE_SESSION = {
-  questions: [{ id: "s1", review: { status: "pending" } }],
+  questions: [{ id: "s1:1", review: { status: "pending" } }],
   pointsPossible: 5,
   statusFilter: "accepted",
+  attemptSelection: { s1: 1 },
+  defaultAttempt: "latest",
 };
 
 describe("saveSession / loadSession", () => {
@@ -46,6 +48,40 @@ describe("saveSession / loadSession", () => {
     localStorage.setItem("survey-to-qti:session", "not json");
 
     expect(loadSession()).toBeNull();
+  });
+
+  it("returns null for a schema-1 (pre-attempts-rework) session, rather than misreading it", () => {
+    localStorage.setItem(
+      "survey-to-qti:session",
+      JSON.stringify({
+        schemaVersion: 1,
+        questions: [{ id: "s1", review: { status: "pending" } }],
+        pointsPossible: 5,
+        statusFilter: "accepted",
+      }),
+    );
+
+    expect(loadSession()).toBeNull();
+  });
+
+  it("defaults attemptSelection/defaultAttempt when a current-schema session predates them", () => {
+    localStorage.setItem(
+      "survey-to-qti:session",
+      JSON.stringify({
+        schemaVersion: 2,
+        questions: [],
+        pointsPossible: null,
+        statusFilter: "all",
+      }),
+    );
+
+    expect(loadSession()).toEqual({
+      questions: [],
+      pointsPossible: null,
+      statusFilter: "all",
+      attemptSelection: {},
+      defaultAttempt: "first",
+    });
   });
 });
 

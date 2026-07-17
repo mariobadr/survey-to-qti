@@ -2,15 +2,23 @@ const STORAGE_KEY = "survey-to-qti:session";
 
 // Bumped whenever the shape of a stored session changes -- lets loadSession
 // refuse a session from an incompatible version instead of silently
-// misinterpreting it (relevant once Planned rework item 6 changes the
-// Question shape).
-const SCHEMA_VERSION = 1;
+// misinterpreting it. Bumped to 2 for Planned rework item 6: Question `id`
+// is now composite (sisLoginId:attempt) and attempts are no longer deduped
+// at parse time, so a schema-1 session's `questions` (deduped, plain-id)
+// isn't safe to reinterpret under the new code.
+const SCHEMA_VERSION = 2;
 
 /**
  * @typedef {object} Session
  * @property {object[]} questions - Question objects (Section 4's data model).
  * @property {number | null} pointsPossible - The shared points-possible value.
  * @property {string} statusFilter - The Queue's active status filter.
+ * @property {Record<string, number>} attemptSelection - TA-chosen attempt
+ *   numbers per student (Planned rework item 6, src/attempts.js), keyed by
+ *   sisLoginId. A student with no entry here uses `defaultAttempt` instead.
+ * @property {"first" | "latest"} defaultAttempt - Which attempt counts as
+ *   "the" attempt for a student who has more than one and no explicit
+ *   `attemptSelection` entry yet, chosen on the Upload screen.
  */
 
 /**
@@ -23,6 +31,8 @@ function toStorable(session) {
     questions: session.questions,
     pointsPossible: session.pointsPossible,
     statusFilter: session.statusFilter,
+    attemptSelection: session.attemptSelection,
+    defaultAttempt: session.defaultAttempt,
   };
 }
 
@@ -44,6 +54,8 @@ function fromStorable(data) {
     questions: data.questions,
     pointsPossible: data.pointsPossible ?? null,
     statusFilter: data.statusFilter ?? "all",
+    attemptSelection: data.attemptSelection ?? {},
+    defaultAttempt: data.defaultAttempt ?? "first",
   };
 }
 

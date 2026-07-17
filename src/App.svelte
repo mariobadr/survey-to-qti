@@ -11,6 +11,16 @@ import {
 let questions = $state(null);
 let statusFilter = $state("all");
 
+// Attempt handling (Planned rework item 6, src/attempts.js): a student can
+// have more than one attempt, and exactly one at a time counts as "the"
+// attempt for them -- the TA's explicit per-student choice if there is one
+// (attemptSelection, keyed by sisLoginId), else defaultAttempt (chosen once
+// on the Upload screen). Both are threaded down read/write to Queue, and
+// read-only to Export for the gradebook CSV (Section 7), which can only
+// carry one score per student.
+let attemptSelection = $state({});
+let defaultAttempt = $state("first");
+
 // "review" (Question Review view, Screen 2) or "export" (Screen 3).
 let view = $state("review");
 
@@ -33,8 +43,10 @@ const savedSession = loadSession();
 // session before the TA has seen it.
 let sessionChoice = $state(savedSession ? "pending" : "decided");
 
-function handleParsed(parsedQuestions) {
+function handleParsed(parsedQuestions, chosenDefaultAttempt) {
   questions = parsedQuestions;
+  defaultAttempt = chosenDefaultAttempt;
+  attemptSelection = {};
 }
 
 /**
@@ -46,6 +58,8 @@ function handleResume() {
   pointsPossible = savedSession.pointsPossible;
   pointsPossibleDraft = savedSession.pointsPossible;
   statusFilter = savedSession.statusFilter;
+  attemptSelection = savedSession.attemptSelection;
+  defaultAttempt = savedSession.defaultAttempt;
   sessionChoice = "decided";
 }
 
@@ -92,12 +106,18 @@ let autosaveFailed = $state(false);
 // has seen it. Nested reads of `questions` during serialization (inside
 // saveSession) register as dependencies too, same as any other $state, so
 // this reruns on every commit (Save/Close/auto-commit-on-unmount all flow
-// through handleSave) and on every pointsPossible/statusFilter change --
-// never on Detail's uncommitted keystroke-level draft state, which never
-// touches `questions` until commit.
+// through handleSave) and on every pointsPossible/statusFilter/
+// attemptSelection change -- never on Detail's uncommitted
+// keystroke-level draft state, which never touches `questions` until commit.
 $effect(() => {
   if (questions === null) return;
-  autosaveFailed = !saveSession({ questions, pointsPossible, statusFilter });
+  autosaveFailed = !saveSession({
+    questions,
+    pointsPossible,
+    statusFilter,
+    attemptSelection,
+    defaultAttempt,
+  });
 });
 </script>
 
@@ -122,7 +142,13 @@ $effect(() => {
   {:else if questions === null}
     <Upload onParsed={handleParsed} />
   {:else if view === "export"}
-    <Export {questions} {pointsPossible} onBack={() => (view = "review")} />
+    <Export
+      {questions}
+      {pointsPossible}
+      {attemptSelection}
+      {defaultAttempt}
+      onBack={() => (view = "review")}
+    />
   {:else}
     <div class="points-possible">
       <label>
@@ -139,6 +165,8 @@ $effect(() => {
     <Queue
       {questions}
       bind:statusFilter
+      bind:attemptSelection
+      {defaultAttempt}
       {pointsPossible}
       onSave={handleSave}
     />

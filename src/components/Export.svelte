@@ -1,4 +1,5 @@
 <script>
+import { selectCanonicalQuestions } from "../attempts.js";
 import {
   buildGradebookCsv,
   buildGradebookRows,
@@ -9,17 +10,33 @@ import { generateQtiZip } from "../qti/generateQtiZip.js";
 /**
  * @typedef {object} Props
  * @property {object[]} questions - All Question objects (Section 4's data
- *   model), unfiltered -- only `review.status === "accepted"` ones make it
- *   into the QTI package (Section 6); the gradebook CSV (Section 7) instead
- *   includes every student, regardless of status.
+ *   model), unfiltered, one entry per attempt (Planned rework item 6) --
+ *   only `review.status === "accepted"` ones make it into the QTI package
+ *   (Section 6), regardless of which attempt they are.
  * @property {number | null} pointsPossible - The shared points-possible
  *   value (Section 4), written into the gradebook CSV's "Points Possible"
  *   row.
+ * @property {Record<string, number>} attemptSelection - TA-chosen attempt
+ *   numbers per student (Planned rework item 6, src/attempts.js). The
+ *   gradebook CSV (Section 7) can only carry one score per student, so it's
+ *   built from exactly one attempt per student -- whichever one this
+ *   selects (or `defaultAttempt`, for a student with no explicit choice).
+ * @property {"first" | "latest"} defaultAttempt - See attemptSelection.
  * @property {() => void} onBack - Returns to the Question Review view.
  */
 
 /** @type {Props} */
-let { questions, pointsPossible, onBack } = $props();
+let { questions, pointsPossible, attemptSelection, defaultAttempt, onBack } =
+  $props();
+
+// The gradebook CSV (Section 7) is per-student, not per-attempt -- Canvas
+// has no way to carry more than one score for the same student in the same
+// column. Reduced to one Question per student using the same selection the
+// TA made in the Queue view (or its default), so the score that reaches the
+// gradebook always matches whichever attempt the TA was actually looking at.
+let canonicalQuestions = $derived(
+  selectCanonicalQuestions(questions, attemptSelection, defaultAttempt),
+);
 
 let title = $state(
   `Reviewed Questions (${new Date().toISOString().slice(0, 10)})`,
@@ -41,7 +58,7 @@ let pending = $derived(questions.filter((q) => q.review.status === "pending"));
 // would contain -- no separate preview-only logic to drift out of sync.
 let quizTextPreview = $derived(buildQuizText(questions, title));
 let gradebookRowsPreview = $derived(
-  buildGradebookRows(questions, pointsPossible),
+  buildGradebookRows(canonicalQuestions, pointsPossible),
 );
 
 function sanitizeFilename(name) {
@@ -58,7 +75,7 @@ function downloadBlob(content, type, filename) {
 }
 
 function handleDownloadGradebookCsv() {
-  const csv = buildGradebookCsv(questions, pointsPossible);
+  const csv = buildGradebookCsv(canonicalQuestions, pointsPossible);
   downloadBlob(csv, "text/csv", `${sanitizeFilename(title)}-grades.csv`);
   gradebookDownloaded = true;
 }

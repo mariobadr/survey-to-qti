@@ -3,9 +3,11 @@ import { parseSurveyCsv } from "../csv/parseSurveyCsv.js";
 
 /**
  * @typedef {object} Props
- * @property {(questions: object[]) => void} onParsed - Called with the
- *   valid, deduped Question objects once the TA clicks "Continue to review
- *   queue" (Section 5, Screen 1 -> Screen 2).
+ * @property {(questions: object[], defaultAttempt: "first" | "latest") => void} onParsed -
+ *   Called with the valid Question objects (one per attempt -- not deduped,
+ *   Planned rework item 6) and the TA's chosen default-attempt setting,
+ *   once the TA clicks "Continue to review queue" (Section 5, Screen 1 ->
+ *   Screen 2).
  */
 
 /** @type {Props} */
@@ -14,6 +16,12 @@ let { onParsed } = $props();
 let fileName = $state(null);
 let result = $state(null);
 let readError = $state(null);
+
+// Which attempt counts as "the" attempt for a student with more than one,
+// until the TA explicitly picks a different one for that student in the
+// Queue view (src/attempts.js). "first" matches the old (removed) dedup
+// behavior, which always kept the earliest attempt.
+let defaultAttempt = $state("first");
 
 // Structurally invalid rows mean the file's shape doesn't match what a
 // Canvas survey export looks like at all (wrong file, or a corrupted
@@ -52,11 +60,12 @@ async function handleFileChange(event) {
 }
 
 /**
- * Hand the parsed, valid questions off to the parent (App.svelte) so it can
- * move on to the review queue. Only reachable when `canContinue` is true.
+ * Hand the parsed, valid questions and the chosen default-attempt setting
+ * off to the parent (App.svelte) so it can move on to the review queue.
+ * Only reachable when `canContinue` is true.
  */
 function handleContinue() {
-  onParsed(result.questions);
+  onParsed(result.questions, defaultAttempt);
 }
 
 /**
@@ -78,8 +87,6 @@ function describeWarning(warning) {
       return `Row ${warning.rowNumber} (${warning.sisLoginId}): ${warning.keywords.length} keyword(s), expected 2-4`;
     case "wordCountExceeded":
       return `Row ${warning.rowNumber} (${warning.sisLoginId}): ${warning.field} is ${warning.actual} words, limit is ${warning.limit}`;
-    case "duplicateAttemptDropped":
-      return `${warning.name} (${warning.sisLoginId}): dropped attempt ${warning.droppedAttempt} (row ${warning.droppedRowNumber}), kept attempt ${warning.keptAttempt}`;
     default:
       return JSON.stringify(warning);
   }
@@ -145,6 +152,15 @@ function describeWarning(warning) {
           {/each}
         </ul>
       {/if}
+
+      <label>
+        Default attempt (for students with more than one -- can be changed
+        per student in the review queue):
+        <select bind:value={defaultAttempt}>
+          <option value="first">First attempt</option>
+          <option value="latest">Latest attempt</option>
+        </select>
+      </label>
 
       <button type="button" disabled={!canContinue} onclick={handleContinue}>
         Continue to review queue

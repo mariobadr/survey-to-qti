@@ -24,8 +24,11 @@ const fixtureCsv = readFileSync(FIXTURE_PATH, "utf-8");
 const SAVED_SESSION = {
   questions: [
     {
-      id: "s1",
-      submission: { student: { name: "Alice Anderson" } },
+      id: "s1:1",
+      submission: {
+        student: { name: "Alice Anderson", sisLoginId: "s1" },
+        attempt: 1,
+      },
       question: { bloomLevel: "Remember" },
       original: {},
       review: { status: "pending", grade: { points: null }, wasEdited: false },
@@ -33,6 +36,8 @@ const SAVED_SESSION = {
   ],
   pointsPossible: 5,
   statusFilter: "pending",
+  attemptSelection: {},
+  defaultAttempt: "first",
 };
 
 describe("App: resume flow", () => {
@@ -100,7 +105,7 @@ describe("App: autosave", () => {
         type: "text/csv",
       }),
     );
-    await waitFor(() => screen.getByText(/6 valid questions ready for review/));
+    await waitFor(() => screen.getByText(/7 valid questions ready for review/));
     await userEvent.click(
       screen.getByRole("button", { name: /continue to review queue/i }),
     );
@@ -110,7 +115,7 @@ describe("App: autosave", () => {
     const raw = localStorage.getItem("survey-to-qti:session");
     expect(raw).not.toBeNull();
     const saved = JSON.parse(raw);
-    expect(saved.questions).toHaveLength(6);
+    expect(saved.questions).toHaveLength(7);
   });
 
   it("shows an unobtrusive warning when autosave fails, and clears it once autosave succeeds again", async () => {

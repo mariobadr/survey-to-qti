@@ -52,7 +52,7 @@ function missingAnswerFields(answers) {
 
 /**
  * Build a review-ready Question object (PROJECT_SPEC.md Section 4's data
- * model) from one complete, structurally-valid, already-deduped CSV row.
+ * model) from one structurally-valid, non-empty CSV row (one attempt).
  *
  * @param {Record<string, string>} metadata - Metadata, as returned by extractRow.
  * @param {Record<string, string>} answers - Answers, as returned by extractRow.
@@ -76,10 +76,12 @@ function buildQuestion(metadata, answers) {
   const correctAnswer = normalizeCorrectAnswer(answers.correctAnswerRaw);
 
   return {
-    // One graded survey submission per student is expected, so the SIS
-    // login ID (stable, present on every row) makes a fine, debuggable ID
-    // once duplicate attempts have been collapsed to one row per student.
-    id: metadata.sisLoginId,
+    // A student can have more than one attempt (Planned rework item 6), so
+    // sisLoginId alone isn't unique -- composite with the attempt number.
+    // Still stable and debuggable, and every consumer that needs "all
+    // attempts for this student" groups by submission.student.sisLoginId
+    // directly (see src/attempts.js) rather than parsing this id back apart.
+    id: `${metadata.sisLoginId}:${metadata.attempt}`,
     submission: {
       student: {
         name: metadata.name,
@@ -234,9 +236,12 @@ function collectWarnings(rowNumber, metadata, answers, keywords) {
  *
  * @param {string} csvText - Raw CSV file contents, header row included.
  * @returns {{ questions: object[], summary: object }} `questions` are the
- *   valid, deduped Question objects; `summary` reports total rows parsed,
- *   the valid question count, structurally invalid rows, empty rows, and
- *   non-blocking warnings (see PROJECT_SPEC.md Section 4/5).
+ *   valid Question objects, one per attempt -- a student with multiple
+ *   attempts gets multiple entries, not deduped (Planned rework item 6; see
+ *   src/attempts.js for how the review UI groups them back by student).
+ *   `summary` reports total rows parsed, the valid question count,
+ *   structurally invalid rows, empty rows, and non-blocking warnings (see
+ *   PROJECT_SPEC.md Section 4/5).
  */
 export function parseSurveyCsv(csvText) {
   const parsed = Papa.parse(csvText, { skipEmptyLines: true });
@@ -273,7 +278,7 @@ export function parseSurveyCsv(csvText) {
 
   const emptyRows = [];
   const warnings = [];
-  const candidates = []; // rows with at least one answer, keyed for dedup below
+  const questions = [];
 
   dataRows.forEach((row, i) => {
     const rowNumber = i + 1;
@@ -305,37 +310,13 @@ export function parseSurveyCsv(csvText) {
 
     const keywords = parseKeywords(answers.keywordsRaw);
     warnings.push(...collectWarnings(rowNumber, metadata, answers, keywords));
-    candidates.push({ rowNumber, metadata, answers });
+    // Every attempt becomes its own question -- no dedup (Planned rework
+    // item 6). The Question Review view (Section 5) groups these back by
+    // student and lets the TA pick which attempt is "the" one for that
+    // student (src/attempts.js), rather than deciding that here at parse
+    // time.
+    questions.push(buildQuestion(metadata, answers));
   });
-
-  const byStudent = new Map();
-  for (const candidate of candidates) {
-    const key = candidate.metadata.sisLoginId;
-    const existing = byStudent.get(key);
-    if (!existing) {
-      byStudent.set(key, candidate);
-      continue;
-    }
-    const existingAttempt = Number.parseInt(existing.metadata.attempt, 10);
-    const candidateAttempt = Number.parseInt(candidate.metadata.attempt, 10);
-    const [kept, dropped] =
-      candidateAttempt < existingAttempt
-        ? [candidate, existing]
-        : [existing, candidate];
-    byStudent.set(key, kept);
-    warnings.push({
-      type: "duplicateAttemptDropped",
-      sisLoginId: key,
-      name: dropped.metadata.name,
-      keptAttempt: Number.parseInt(kept.metadata.attempt, 10),
-      droppedAttempt: Number.parseInt(dropped.metadata.attempt, 10),
-      droppedRowNumber: dropped.rowNumber,
-    });
-  }
-
-  const questions = [...byStudent.values()].map(({ metadata, answers }) =>
-    buildQuestion(metadata, answers),
-  );
 
   return {
     questions,

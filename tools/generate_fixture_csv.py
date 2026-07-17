@@ -185,9 +185,10 @@ FABRICATED_ROWS = [
         feedback_d="Not a real term.",
         correct_answer="A",
     ),
-    # Messy: duplicate attempts for the same student (David Davis). Two rows
-    # below share sis_id=fab00004; attempt 1 should be kept, attempt 2
-    # dropped and logged.
+    # Messy: multiple attempts for the same student (David Davis). Two rows
+    # below share sis_id=fab00004 -- both should survive as separate
+    # questions (Planned rework item 6, no dedup), grouped back together by
+    # the review UI (src/attempts.js) with the TA choosing which one counts.
     student_row(
         name="David Davis",
         canvas_id="100004",

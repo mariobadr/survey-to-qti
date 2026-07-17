@@ -57,24 +57,20 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
     ).toBe(false);
   });
 
-  it("collapses David Davis's duplicate attempts to the minimum attempt and logs the drop", () => {
-    const davidRows = result.questions.filter(
-      (q) => q.submission.student.sisLoginId === "fab00004",
-    );
-    expect(davidRows).toHaveLength(1);
-    expect(davidRows[0].submission.attempt).toBe(1);
+  it("keeps both of David Davis's attempts as separate questions, not deduped (Planned rework item 6)", () => {
+    const davidRows = result.questions
+      .filter((q) => q.submission.student.sisLoginId === "fab00004")
+      .sort((a, b) => a.submission.attempt - b.submission.attempt);
+
+    expect(davidRows).toHaveLength(2);
+    expect(davidRows.map((q) => q.submission.attempt)).toEqual([1, 2]);
+    expect(davidRows.map((q) => q.id)).toEqual(["fab00004:1", "fab00004:2"]);
     expect(davidRows[0].question.stem).toBe(
       "What is the average-case time complexity of quicksort?",
     );
-
-    const dropped = result.summary.warnings.find(
-      (w) => w.type === "duplicateAttemptDropped",
+    expect(davidRows[1].question.stem).toBe(
+      "What is the worst-case time complexity of quicksort?",
     );
-    expect(dropped).toMatchObject({
-      sisLoginId: "fab00004",
-      keptAttempt: 1,
-      droppedAttempt: 2,
-    });
   });
 
   it("flags Carol Chen's malformed (single) keyword as a warning, not a rejection", () => {
@@ -101,15 +97,15 @@ describe("parseSurveyCsv against the fabricated fixture", () => {
     expect(warning.actual).toBeGreaterThan(warning.limit);
   });
 
-  it("produces exactly 6 valid questions after dropping the empty row and deduping attempts", () => {
-    expect(result.questions).toHaveLength(6);
-    expect(result.summary.validQuestionCount).toBe(6);
+  it("produces exactly 7 valid questions after dropping the empty row (both of David Davis's attempts survive)", () => {
+    expect(result.questions).toHaveLength(7);
+    expect(result.summary.validQuestionCount).toBe(7);
   });
 
   it("builds a well-formed Question object for a clean row", () => {
     const alice = findQuestion(result.questions, "fab00001");
     expect(alice).toMatchObject({
-      id: "fab00001",
+      id: "fab00001:1",
       submission: {
         student: {
           name: "Alice Anderson",

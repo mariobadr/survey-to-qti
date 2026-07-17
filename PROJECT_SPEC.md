@@ -59,12 +59,14 @@ question is editable during review, review state is written continuously).
 
 ```js
 {
-  id: string,                   // == submission.student.sisLoginId; one graded survey submission per student
+  id: string,                   // `${sisLoginId}:${attempt}` -- one object per attempt, not per student
+                                 // (Planned rework item 6); a student with N attempts has N of these
 
   submission: {
     student: {
       name: string,             // as it appears in the Canvas export
-      sisLoginId: string,       // needed later for gradebook CSV matching (Section 7)
+      sisLoginId: string,       // needed later for gradebook CSV matching (Section 7); also the key
+                                 // src/attempts.js groups attempts back together by
       canvasId: string          // Canvas internal user ID; unused during review, kept for later matching
     },
     section: {
@@ -73,8 +75,9 @@ question is editable during review, review state is written continuously).
       sectionSisId: string       // e.g. "CSC101-F-LEC0101-20269"
     },
     submittedAt: string,        // raw Canvas timestamp, e.g. "2026-05-31 04:00:00 UTC"
-    attempt: number             // the attempt number kept after dedup (see below) — always the minimum
-                                 // attempt value seen for that student, i.e. their first attempt
+    attempt: number             // this row's actual attempt number -- no longer deduped to "the" attempt
+                                 // at parse time (Planned rework item 6); see Section 5 for how the
+                                 // review UI groups a student's attempts back together
   },
 
   question: {
@@ -155,10 +158,13 @@ unconfirmed):
   question at all, so there's nothing to review, edit, or grade. Reported
   separately as `emptyRows`, non-blocking (unlike a structurally invalid
   row).
-- **Duplicate attempts**: rows are grouped by `sisLoginId`; if a student has
-  more than one structurally-valid, non-empty row, only the one with the
-  minimum `attempt` value is kept. Every drop is logged in the parse summary
-  (`type: "duplicateAttemptDropped"`), never silent.
+- **Multiple attempts are not deduped.** Every structurally-valid, non-empty
+  row becomes its own Question object, even if a student has more than one
+  (Planned rework item 6) — parsing doesn't decide which attempt "counts".
+  [`src/attempts.js`](src/attempts.js) groups them back together by
+  `sisLoginId` for the review UI and gradebook export (Section 5/7), where
+  the TA picks (or a default settles) which single attempt is the one that
+  matters for that student.
 - `bloomLevel` and `correctAnswer` normalization are each isolated in a
   single small function
   ([`normalizeBloomLevel`](src/csv/fieldNormalization.js),
@@ -193,13 +199,37 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
    export at all, so nothing in the file is imported — see Section 4) or
    when zero valid questions resulted (nothing to review). Missing-field
    warnings, empty rows, word-count violations, and the other warning types
-   never block.
-2. **Question Review view** — table of all submissions: student, Bloom
-   level, status, grade. Filterable by status (no Bloom-level filter — not
-   useful in practice). The row-select button shows a +/- icon and expands
-   the student's row in place (no separate detail page); only one row is
-   expanded at a time, no Next/Previous — the TA clicks whichever row they
-   want next. The expanded row splits into two panels:
+   never block. Also a "Default attempt" dropdown (First/Latest, defaults to
+   First) — which attempt counts as "the" attempt for a student with more
+   than one (Planned rework item 6), until the TA picks a different one for
+   that specific student in the Question Review view.
+2. **Question Review view** — one row per **student** (Planned rework item
+   6), not per attempt: student, Graded attempt, Bloom level, status, grade.
+   The "Graded attempt" column header carries a tooltip explaining what it
+   controls — whichever attempt is selected is the one whose grade reaches
+   the gradebook CSV (Section 7), not necessarily whichever is accepted. A
+   student with only one attempt shows it as plain text; a student with more
+   than one shows a dropdown ("1 (first)", "2", ..., "N (latest)")
+   defaulting to whichever the Upload screen's "Default attempt" setting
+   picks, changeable per student at any time
+   ([`src/attempts.js`](src/attempts.js) resolves the dropdown/default into
+   a single selected attempt per student). If any *other* attempt for that
+   student is accepted while it isn't selected, an inline warning appears
+   next to the dropdown ("⚠ attempt N accepted but not graded") — accepting
+   an attempt and selecting it for the gradebook are independent choices,
+   and an accepted-but-unselected attempt's grade would otherwise be left
+   out of the gradebook CSV silently. Bloom level/status/grade and the
+   expanded row always reflect only that student's *currently selected*
+   attempt — switching the dropdown is the only way to view or edit a
+   different one. Filterable by status (no Bloom-level filter — not useful
+   in practice), applied against each student's selected attempt. The
+   row-select button shows a +/- icon and expands the student's row in place
+   (no separate detail page); only one row is expanded at a time, no
+   Next/Previous — the TA clicks whichever row they want next. Switching
+   which attempt is selected for an expanded student's row swaps the
+   expanded Detail view to that attempt (auto-committing the outgoing
+   attempt's draft first, same as collapsing or expanding a different
+   student would). The expanded row splits into two panels:
    - **Question panel** — Bloom level and Keywords side by side, then Stem,
      then Responses as a table (correct-answer radio | Response | Feedback
      columns, first narrower than the other two). Every editable field shows
@@ -230,8 +260,7 @@ Show these as warnings in the review UI; let the TA decide whether to edit or le
 
 ### Planned rework (from hands-on TA-perspective feedback)
 
-Six items identified trying Screens 1-3 end to end. Items 1-5 are done; item 6 (parse every
-attempt, not just the earliest) is a bigger, not-fully-designed change and is what's left.
+Six items identified trying Screens 1-3 end to end. All six are done.
 
 1. ~~Merge Queue and Detail into one Question Review view~~ **Done** — see Screen 2 above;
    no more separate detail page, no Next/Previous/working-set navigation.
@@ -244,12 +273,23 @@ attempt, not just the earliest) is a bigger, not-fully-designed change and is wh
    when `pointsPossible` changes.
 5. ~~Remove the Bloom-level filter~~ **Done** — not useful in practice; the table column
    stays, just not filterable.
-6. **Parse and show every attempt per student, not just the earliest — not started.**
-   Bigger than items 1-5, and reopens work already marked done: the CSV parser's
-   attempt-dedup logic (Section 4/10 step 2), whether `id` needs a composite key, whether
-   the data model groups by student or stays flat, what "accepted" means across multiple
-   attempts from one student, and which attempt's grade reaches the gradebook (Section 7)
-   are all still open.
+6. ~~Parse and show every attempt per student, not just the earliest~~ **Done** —
+   the CSV parser (Section 4) no longer dedups; every attempt becomes its own Question
+   object with a composite `id`. [`src/attempts.js`](src/attempts.js) groups them back
+   by student for the Question Review view (Screen 2) and the gradebook CSV (Section
+   7). The open questions this item left behind are now resolved:
+   - **Composite id**: `${sisLoginId}:${attempt}`.
+   - **Data model stays flat** (one Question per attempt, same shape as before) rather
+     than nesting attempts under a student record -- grouping happens at render/export
+     time instead, so every other consumer (QTI export, existing tests) didn't need to
+     change shape.
+   - **"Accepted" is still per-attempt, not per-student**: each attempt is reviewed,
+     graded, and accepted/rejected independently. Multiple accepted attempts from the
+     same student can all end up in the QTI package (Section 6) -- they're distinct
+     questions.
+   - **Which attempt's grade reaches the gradebook**: whichever one the TA selected
+     for that student in the Question Review view (or the Upload screen's default, if
+     they never picked one) -- see Section 7.
 
 ## 6. QTI export via text2qti + Pyodide
 
@@ -351,8 +391,16 @@ scratch.
   importing.
 - Second row is `Points Possible` (Canvas's own required row), holding the
   shared `pointsPossible` value (Section 4).
-- One row per parsed student **regardless of review status** — a student
-  not yet graded just gets a blank score cell, so re-exporting later after
+- One row per **student**, not per attempt (Planned rework item 6) —
+  Canvas has no way to carry more than one score for the same student in
+  the same column. [`src/attempts.js`](src/attempts.js)'s
+  `selectCanonicalQuestions` reduces `questions` down to exactly one per
+  student first, using the same attempt the TA selected (or defaulted to)
+  in the Question Review view (Screen 2), so the score that reaches the
+  gradebook always matches whichever attempt the TA was actually looking
+  at — never both, and never silently the wrong one.
+- Every student gets a row **regardless of review status** — one not yet
+  graded just gets a blank score cell, so re-exporting later after
   finishing review doesn't require starting over. A blank score cell leaves
   that student's Canvas grade untouched on import rather than zeroing it.
 - Output: a downloadable CSV, ready to re-upload via Canvas's
@@ -370,12 +418,12 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   `localStorage` over IndexedDB: plenty of headroom for text-only review
   data, and a synchronous API needs no wrapper library. Persists on every
   commit (Save/Close/auto-commit-on-unmount all flow through `App.svelte`'s
-  `handleSave`) and on every `pointsPossible`/`statusFilter` change, via a
-  `$effect` in `App.svelte` — not on in-progress keystrokes inside an open
-  (uncommitted) row, since those never touch shared state until commit
-  anyway. If an autosave attempt fails (quota, private browsing,
-  unavailable), an unobtrusive banner tells the TA rather than failing
-  silently — see below.
+  `handleSave`) and on every `pointsPossible`/`statusFilter`/
+  `attemptSelection`/`defaultAttempt` change, via a `$effect` in
+  `App.svelte` — not on in-progress keystrokes inside an open (uncommitted)
+  row, since those never touch shared state until commit anyway. If an
+  autosave attempt fails (quota, private browsing, unavailable), an
+  unobtrusive banner tells the TA rather than failing silently — see below.
 - **Resume on load**: if a saved session exists, the TA sees a "Resume
   previous session? / Start over" prompt before Upload — no silent
   auto-resume, and no separate confirmation dialog either, since choosing
@@ -387,8 +435,10 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   no dismiss button, since it's just informational and self-corrects.
 - Saved sessions are schema-versioned (`schemaVersion` in the stored JSON);
   a version mismatch is treated as nothing-to-resume rather than guessed
-  at, so a future data model change (e.g. Planned rework item 6) can't
-  silently misread an old session.
+  at, so a data model change can't silently misread an old session. Bumped
+  to 2 for Planned rework item 6 (composite `id`s, no attempt dedup, plus
+  the new `attemptSelection`/`defaultAttempt` fields) — a schema-1 session
+  is simply treated as nothing to resume rather than reinterpreted.
 
 ## 9. Tech stack
 
@@ -419,9 +469,9 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
    **Done** — see Section 4 and [`src/csv/`](src/csv/). No real submission
    exists yet, so tested against a fabricated fixture
    ([`tools/generate_fixture_csv.py`](tools/generate_fixture_csv.py)) rather
-   than a hand-written one. **Partially reopened by step 4** — the
-   attempt-dedup logic here assumes one attempt survives per student; see
-   "Planned rework" item 6 (Section 5).
+   than a hand-written one. Its original attempt-dedup logic (assumed one
+   attempt survives per student) was later removed entirely — see "Planned
+   rework" item 6 (Section 5), now done.
 3. ~~Review queue + detail UI (no persistence yet)~~ **Done** — Screens 1-3
    of Section 5, all still without persistence (that's step 5):
    - Upload screen (Screen 1) — see
@@ -440,16 +490,11 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
      Bloom level/keywords, three-way status with Accept gating, frozen
      working-set navigation, draft-until-commit editing, content-only
      monotonic `wasEdited`).
-4. Rework Queue/Detail into the Question Review view per "Planned rework"
-   (Section 5) — items 1-5 (merged Queue+Detail view, persisted `original`
-   snapshot, dropped `grade.comment`, non-per-question `pointsPossible`, no
-   Bloom-level filter) are all done. Doing this before step 5 (Autosave)
-   rather than after, since building autosave against a UI/data model
-   that's still changing would mean redoing autosave work too. Item 6
-   (parse and show every attempt per student, not just the earliest) is
-   still open and still reopens part of step 2 (the CSV parser's
-   attempt-dedup logic) when it's tackled — the biggest and
-   least-designed piece of this step.
+4. ~~Rework Queue/Detail into the Question Review view per "Planned rework"~~
+   **Done** — all six items (Section 5) are done, including item 6 (parse
+   and show every attempt per student), tackled last since it was the
+   biggest and reopened part of step 2 (the CSV parser's attempt-dedup
+   logic, since removed entirely).
 5. ~~Autosave (localStorage)~~ **Done** — see Section 8 and
    [`src/persistence/session.js`](src/persistence/session.js).
 6. ~~Full QTI export~~ **Done, real-browser-verified** — see Section 6 and
@@ -727,3 +772,37 @@ Implemented in [`src/persistence/session.js`](src/persistence/session.js).
   with a new completely-empty row (Grace Green) to cover the `emptyRows`
   path, and updated its comment on the pre-existing missing-field row (Erin
   Evans) to reflect that it's included, not excluded.
+- 2026-07-16 — Completed "Planned rework" item 6: stopped dropping a
+  student's extra attempts. `parseSurveyCsv` (Section 4) no longer dedups —
+  every attempt becomes its own Question object with a composite
+  `${sisLoginId}:${attempt}` id. Added
+  [`src/attempts.js`](src/attempts.js) (pure, fully unit-tested) to group
+  attempts back together by student and resolve which one is "selected" for
+  a student, given the TA's explicit choice if any or a default otherwise.
+  Queue.svelte (Section 5, Screen 2) now renders one row per student instead
+  of one per attempt, with a new Attempt column: plain text for a single
+  attempt, a dropdown ("1 (first)", "2", ..., "N (latest)") for more than
+  one. Every displayed column and the expanded Detail view reflect only the
+  selected attempt; switching the dropdown while a row is expanded swaps
+  Detail to the newly selected attempt, auto-committing the outgoing one's
+  draft first (same mechanism as switching to a different student's row).
+  Upload.svelte (Screen 1) gained a "Default attempt" (First/Latest)
+  dropdown, threaded down through `App.svelte` as `defaultAttempt`, used
+  whenever a student has no explicit per-student selection yet
+  (`attemptSelection`, also threaded through `App.svelte`, mutated in place
+  by Queue). Both are autosaved and resumed like every other piece of
+  session state (Section 8; schema bumped to 2, since a schema-1 session's
+  `questions` are deduped with plain, non-composite ids and aren't safe to
+  reinterpret under the new code). The gradebook CSV (Section 7) can only
+  carry one score per student, so `Export.svelte` reduces `questions` down
+  to one per student via `selectCanonicalQuestions` before building it —
+  whichever attempt is selected for that student is the one whose grade
+  reaches Canvas. The QTI export (Section 6) needed no changes: accept/
+  reject is still per-attempt, and multiple accepted attempts from the same
+  student legitimately become multiple distinct quiz questions. Since
+  accepting an attempt and selecting it for the gradebook are independent
+  choices, an accepted-but-unselected attempt's grade could otherwise be
+  left out of the gradebook silently -- addressed by renaming the Attempt
+  column to "Graded attempt" (with a tooltip explaining what it controls)
+  and adding an inline warning next to the dropdown whenever a student has
+  an accepted attempt that isn't the selected one.
