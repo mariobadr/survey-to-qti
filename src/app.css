@@ -215,6 +215,21 @@ table {
   font-size: var(--font-size-base);
 }
 
+/* Visually hidden but still reachable by screen readers -- for headings
+   that establish structure (e.g. one per view, for heading-navigation) but
+   would be visually redundant with a nav bar or other on-screen label. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Alerts: section/page-level notices (autosave failures, blocking errors,
    confirmations). Field-level inline warnings stay plain colored text --
    boxing every word-count notice would hurt density -- these are for

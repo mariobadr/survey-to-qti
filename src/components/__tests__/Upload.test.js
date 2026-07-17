@@ -62,20 +62,20 @@ async function uploadFile(text, name) {
 }
 
 describe("Upload", () => {
-  it("shows the default-attempt picker but no Continue button before a file is chosen", () => {
+  it("shows the default-attempt picker but no Upload button before a file is chosen", () => {
     render(Upload, { props: { onParsed: vi.fn() } });
 
     expect(screen.getByLabelText(/default attempt/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /continue to review queue/i }),
+      screen.queryByRole("button", { name: /upload this data/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("parses the fabricated fixture without repeating non-blocking warnings, and enables Continue", async () => {
+  it("parses the fabricated fixture without repeating non-blocking warnings, and enables Upload", async () => {
     await uploadFile(fixtureCsv, "fabricated-survey-export.csv");
 
     const continueButton = await screen.findByRole("button", {
-      name: /continue to review queue/i,
+      name: /upload this data/i,
     });
     expect(continueButton).toBeEnabled();
 
@@ -92,7 +92,8 @@ describe("Upload", () => {
 
   it("previews every valid parsed row in a table", async () => {
     await uploadFile(fixtureCsv, "fabricated-survey-export.csv");
-    await screen.findByRole("button", { name: /continue to review queue/i });
+    await screen.findByRole("button", { name: /upload this data/i });
+    await userEvent.click(screen.getByText(/preview parsed questions/i));
 
     expect(
       screen.getByRole("columnheader", { name: "Student" }),
@@ -114,7 +115,8 @@ describe("Upload", () => {
     const csv = `${header}\n${rows.join("\n")}\n`;
 
     await uploadFile(csv, "many-rows.csv");
-    await screen.findByRole("button", { name: /continue to review queue/i });
+    await screen.findByRole("button", { name: /upload this data/i });
+    await userEvent.click(screen.getByText(/preview parsed questions/i));
 
     expect(screen.getAllByRole("row")).toHaveLength(51); // header row + 50 preview rows
     expect(
@@ -128,7 +130,7 @@ describe("Upload", () => {
       "fabricated-survey-export.csv",
     );
     const continueButton = await screen.findByRole("button", {
-      name: /continue to review queue/i,
+      name: /upload this data/i,
     });
 
     await userEvent.selectOptions(
@@ -167,7 +169,7 @@ describe("Upload", () => {
       csvFile(fixtureCsv, "fabricated-survey-export.csv"),
     );
     const continueButton = await screen.findByRole("button", {
-      name: /continue to review queue/i,
+      name: /overwrite the old data/i,
     });
     await userEvent.click(continueButton);
 
@@ -187,7 +189,7 @@ describe("Upload", () => {
       csvFile(fixtureCsv, "fabricated-survey-export.csv"),
     );
     const continueButton = await screen.findByRole("button", {
-      name: /continue to review queue/i,
+      name: /overwrite the old data/i,
     });
     await userEvent.click(continueButton);
 
@@ -210,7 +212,7 @@ describe("Upload", () => {
     );
 
     const continueButton = screen.getByRole("button", {
-      name: /continue to review queue/i,
+      name: /upload this data/i,
     });
     expect(continueButton).toBeDisabled();
     expect(

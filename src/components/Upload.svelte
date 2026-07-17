@@ -1,4 +1,6 @@
 <script>
+import studentAnalysisScreenshot from "../assets/student-analysis.png";
+import surveyStatisticsScreenshot from "../assets/survey-statistics.png";
 import { parseSurveyCsv } from "../csv/parseSurveyCsv.js";
 
 /**
@@ -92,8 +94,14 @@ function handleContinue() {
 </script>
 
 <section>
-  <h2>Upload</h2>
-  <p>Select the Canvas survey CSV export to review.</p>
+  <h2 class="sr-only">Upload</h2>
+  <p>
+    Select the CSV export of student responses to the
+    <a href="{import.meta.env.BASE_URL}expected-survey.zip" download
+      >question-writing survey</a
+    >
+    (QTI package, import into Canvas to set up the survey assignment) to review.
+  </p>
 
   {#if hasExistingQuestions}
     <p class="alert alert-warning">
@@ -155,7 +163,7 @@ function handleContinue() {
           disabled={!canContinue}
           onclick={handleContinue}
         >
-          Continue to review queue
+          {hasExistingQuestions ? "Overwrite the old data" : "Upload this data"}
         </button>
       </div>
       {#if result !== null && !canContinue}
@@ -166,36 +174,71 @@ function handleContinue() {
       {/if}
 
       {#if result.questions.length > 0}
-        <div class="preview-wrapper">
-          <table class="preview-table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Attempt</th>
-                <th>Bloom level</th>
-                <th>Stem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each previewRows as q (q.id)}
+        <details>
+          <summary>Preview parsed questions</summary>
+          <div class="preview-wrapper">
+            <table class="preview-table">
+              <thead>
                 <tr>
-                  <td>{q.submission.student.name}</td>
-                  <td>{q.submission.attempt}</td>
-                  <td>{q.question.bloomLevel ?? "Unrecognized"}</td>
-                  <td>{q.question.stem}</td>
+                  <th>Student</th>
+                  <th>Attempt</th>
+                  <th>Bloom level</th>
+                  <th>Stem</th>
                 </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        {#if result.questions.length > PREVIEW_ROW_LIMIT}
-          <p class="preview-truncated">
-            Showing the first {PREVIEW_ROW_LIMIT} of {result.questions.length} rows.
-          </p>
-        {/if}
+              </thead>
+              <tbody>
+                {#each previewRows as q (q.id)}
+                  <tr>
+                    <td>{q.submission.student.name}</td>
+                    <td>{q.submission.attempt}</td>
+                    <td>{q.question.bloomLevel ?? "Unrecognized"}</td>
+                    <td>{q.question.stem}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          {#if result.questions.length > PREVIEW_ROW_LIMIT}
+            <p class="preview-truncated">
+              Showing the first {PREVIEW_ROW_LIMIT} of {result.questions.length} rows.
+            </p>
+          {/if}
+        </details>
       {/if}
     </div>
   {/if}
+
+  <div class="faq">
+    <h3>Help</h3>
+    <details>
+      <summary>How do I get this CSV file?</summary>
+      <ol>
+        <li>
+          In the Canvas course, open the survey assignment created from the
+          downloaded QTI package above.
+        </li>
+        <li>
+          Once students have responded, open the "Survey Statistics" link in
+          the assignment's "Related Items" sidebar.
+          <img
+            src={surveyStatisticsScreenshot}
+            alt="The assignment sidebar, with a 'Survey Statistics' link under Related Items"
+            class="instruction-screenshot"
+          />
+        </li>
+        <li>
+          On the resulting Quiz Summary page, click "Student Analysis" (next
+          to "Section Filter") to download the CSV.
+          <img
+            src={studentAnalysisScreenshot}
+            alt="The Quiz Summary page, with a 'Student Analysis' button next to the Section Filter"
+            class="instruction-screenshot"
+          />
+        </li>
+        <li>Upload that CSV file above.</li>
+      </ol>
+    </details>
+  </div>
 </section>
 
 <style>
@@ -230,10 +273,38 @@ function handleContinue() {
   .nav {
     margin-block: var(--space-4);
   }
+  details summary {
+    cursor: pointer;
+    color: var(--color-primary);
+    font-weight: 500;
+    margin-block: var(--space-3);
+  }
+  details ol {
+    margin: 0;
+    padding-inline-start: var(--space-5);
+  }
+  details li {
+    margin-block-end: var(--space-2);
+  }
+  .instruction-screenshot {
+    display: block;
+    max-width: 100%;
+    margin-block-start: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
   .result {
     margin-block-start: var(--space-4);
     padding-block-start: var(--space-4);
     border-top: 1px solid var(--color-border);
+  }
+  .faq {
+    margin-block-start: var(--space-4);
+    padding-block-start: var(--space-4);
+    border-top: 1px solid var(--color-border);
+  }
+  .faq h3 {
+    margin: 0;
   }
   .preview-wrapper {
     max-height: 20em;

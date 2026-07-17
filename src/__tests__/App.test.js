@@ -106,7 +106,7 @@ describe("App: autosave", () => {
       }),
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /upload this data/i }),
     );
 
     await waitFor(() => screen.getByText("Alice Anderson"));
@@ -158,7 +158,7 @@ describe("App: nav bar, pointsPossible default, and grade scaling", () => {
       }),
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /upload this data/i }),
     );
     await waitFor(() => screen.getByText("Alice Anderson"));
   }
@@ -237,7 +237,7 @@ describe("App: nav bar, pointsPossible default, and grade scaling", () => {
       }),
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /upload this data/i }),
     );
     await waitFor(() => screen.getByText("Alice Anderson"));
 
@@ -279,7 +279,7 @@ describe("App: nav bar, pointsPossible default, and grade scaling", () => {
       }),
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /overwrite the old data/i }),
     );
 
     expect(confirmSpy).toHaveBeenCalled();
@@ -304,7 +304,7 @@ describe("App: nav bar, pointsPossible default, and grade scaling", () => {
       }),
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /overwrite the old data/i }),
     );
 
     expect(screen.getByText("Alice Anderson")).toBeInTheDocument();
