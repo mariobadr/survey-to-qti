@@ -23,6 +23,14 @@ let readError = $state(null);
 // behavior, which always kept the earliest attempt.
 let defaultAttempt = $state("first");
 
+// The preview table (below) is capped rather than rendering every row --
+// a large CSV could mean hundreds of student submissions, and the table
+// isn't virtualized.
+const PREVIEW_ROW_LIMIT = 50;
+let previewRows = $derived(
+  result ? result.questions.slice(0, PREVIEW_ROW_LIMIT) : [],
+);
+
 // Structurally invalid rows mean the file's shape doesn't match what a
 // Canvas survey export looks like at all (wrong file, or a corrupted
 // export) -- there's no safe way to guess column meaning from a row that
@@ -67,30 +75,6 @@ async function handleFileChange(event) {
 function handleContinue() {
   onParsed(result.questions, defaultAttempt);
 }
-
-/**
- * Format one parseSurveyCsv warning (see parseSurveyCsv.js's collectWarnings)
- * into TA-readable text.
- *
- * @param {object} warning - One entry from `result.summary.warnings`.
- * @returns {string}
- */
-function describeWarning(warning) {
-  switch (warning.type) {
-    case "missingFields":
-      return `Row ${warning.rowNumber} (${warning.name || "unknown student"}): missing ${warning.missingFields.join(", ")} -- included, but grade/edit accordingly`;
-    case "unexpectedBloomLevel":
-      return `Row ${warning.rowNumber} (${warning.sisLoginId}): unrecognized Bloom level "${warning.value}"`;
-    case "unexpectedCorrectAnswer":
-      return `Row ${warning.rowNumber} (${warning.sisLoginId}): unrecognized correct answer "${warning.value}"`;
-    case "unexpectedKeywordCount":
-      return `Row ${warning.rowNumber} (${warning.sisLoginId}): ${warning.keywords.length} keyword(s), expected 2-4`;
-    case "wordCountExceeded":
-      return `Row ${warning.rowNumber} (${warning.sisLoginId}): ${warning.field} is ${warning.actual} words, limit is ${warning.limit}`;
-    default:
-      return JSON.stringify(warning);
-  }
-}
 </script>
 
 <section>
@@ -104,18 +88,25 @@ function describeWarning(warning) {
     onchange={handleFileChange}
   />
 
+  <label>
+    Default attempt:
+    <select bind:value={defaultAttempt}>
+      <option value="first">First attempt</option>
+      <option value="latest">Latest attempt</option>
+    </select>
+  </label>
+
   {#if readError}
     <p class="error">Couldn't read "{fileName}": {readError}</p>
   {/if}
 
   {#if result}
-    <div class="summary">
-      <h3>Parse summary for "{fileName}"</h3>
-      <ul>
-        <li>{result.summary.totalRowsParsed} total rows parsed</li>
-        <li>{result.summary.validQuestionCount} valid questions ready for review</li>
-      </ul>
-
+    <div class="result">
+      <!-- Non-blocking parse warnings (missing fields, unrecognized Bloom
+        level/correct answer, word-count violations, ...) aren't repeated
+        here -- they resurface naturally while reviewing each question
+        (Section 5), so listing them again at upload time would just be
+        noise. Only what actually blocks continuing is shown. -->
       {#if result.summary.structurallyInvalidRows.length > 0}
         <p class="error">
           {result.summary.structurallyInvalidRows.length} row(s) don't match the
@@ -132,36 +123,6 @@ function describeWarning(warning) {
         </ul>
       {/if}
 
-      {#if result.summary.emptyRows.length > 0}
-        <p class="warning">
-          {result.summary.emptyRows.length} row(s) had no answers at all and
-          were excluded from review:
-        </p>
-        <ul class="warning-list">
-          {#each result.summary.emptyRows as row (row.rowNumber)}
-            <li>Row {row.rowNumber} ({row.name || "unknown student"})</li>
-          {/each}
-        </ul>
-      {/if}
-
-      {#if result.summary.warnings.length > 0}
-        <p class="warning">{result.summary.warnings.length} other warning(s):</p>
-        <ul class="warning-list">
-          {#each result.summary.warnings as warning, i (i)}
-            <li>{describeWarning(warning)}</li>
-          {/each}
-        </ul>
-      {/if}
-
-      <label>
-        Default attempt (for students with more than one -- can be changed
-        per student in the review queue):
-        <select bind:value={defaultAttempt}>
-          <option value="first">First attempt</option>
-          <option value="latest">Latest attempt</option>
-        </select>
-      </label>
-
       <button type="button" disabled={!canContinue} onclick={handleContinue}>
         Continue to review queue
       </button>
@@ -171,19 +132,82 @@ function describeWarning(warning) {
           {result.questions.length === 0 ? " -- no valid questions were found." : "."}
         </p>
       {/if}
+
+      {#if result.questions.length > 0}
+        <div class="preview-wrapper">
+          <table class="preview-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Attempt</th>
+                <th>Bloom level</th>
+                <th>Stem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each previewRows as q (q.id)}
+                <tr>
+                  <td>{q.submission.student.name}</td>
+                  <td>{q.submission.attempt}</td>
+                  <td>{q.question.bloomLevel ?? "Unrecognized"}</td>
+                  <td>{q.question.stem}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        {#if result.questions.length > PREVIEW_ROW_LIMIT}
+          <p class="preview-truncated">
+            Showing the first {PREVIEW_ROW_LIMIT} of {result.questions.length} rows.
+          </p>
+        {/if}
+      {/if}
     </div>
   {/if}
 </section>
 
 <style>
+  input[type="file"] {
+    display: block;
+    margin-block-end: 0.75em;
+  }
+  label {
+    display: block;
+  }
   .error {
     color: #b00020;
   }
-  .warning {
-    color: #8a6100;
-  }
-  .error-list,
-  .warning-list {
+  .error-list {
     font-size: 0.9em;
+  }
+  .preview-wrapper {
+    max-height: 20em;
+    overflow: auto;
+    border: 1px solid #ccc;
+    margin-block-start: 1em;
+  }
+  .preview-truncated {
+    font-size: 0.9em;
+    color: #666;
+    margin-block-start: 0.3em;
+  }
+  .preview-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .preview-table th,
+  .preview-table td {
+    border: 1px solid #ccc;
+    padding: 0.25em 0.5em;
+    text-align: left;
+  }
+  .preview-table th:not(:last-child),
+  .preview-table td:not(:last-child) {
+    white-space: nowrap;
+  }
+  .preview-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f5f5f5;
   }
 </style>

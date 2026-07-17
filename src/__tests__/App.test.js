@@ -105,9 +105,8 @@ describe("App: autosave", () => {
         type: "text/csv",
       }),
     );
-    await waitFor(() => screen.getByText(/7 valid questions ready for review/));
     await userEvent.click(
-      screen.getByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /continue to review queue/i }),
     );
 
     await waitFor(() => screen.getByText("Alice Anderson"));
@@ -158,9 +157,8 @@ describe("App: pointsPossible default and grade scaling", () => {
         type: "text/csv",
       }),
     );
-    await waitFor(() => screen.getByText(/7 valid questions ready for review/));
     await userEvent.click(
-      screen.getByRole("button", { name: /continue to review queue/i }),
+      await screen.findByRole("button", { name: /continue to review queue/i }),
     );
     await waitFor(() => screen.getByText("Alice Anderson"));
   }

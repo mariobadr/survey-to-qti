@@ -147,12 +147,14 @@ warnings; the TA decides whether to edit.
 
 ## 5. Screens
 
-1. **Upload** — file picker for the CSV. Shows a parse summary (rows
-   parsed, missing-field/empty-row/word-count warnings) and a "Default
-   attempt" picker (First/Latest) for students with multiple attempts.
-   "Continue to review queue" is disabled only when there are
-   structurally invalid rows or zero valid questions — every other
-   warning is non-blocking.
+1. **Upload** — file picker for the CSV, followed immediately by the
+   "Default attempt" picker (First/Latest) for students with multiple
+   attempts. No parse summary or non-blocking warnings shown here
+   (missing-field/empty-row/word-count/etc.) — those resurface naturally
+   while reviewing each question (Screen 2) instead of being listed twice.
+   "Continue to review queue" is disabled only for the two things that
+   actually block: structurally invalid rows, or zero valid questions —
+   the only cases shown here, as an error.
 2. **Question Review view** — one row per **student**, not per attempt:
    name, Graded attempt, Bloom level, status, grade. A student with one
    attempt shows it as plain text; more than one shows a dropdown
